@@ -43,6 +43,7 @@ class AgentMixin:
                 1 if agent.get('agent_messaging_enabled') is not False else 0,
                 1 if agent.get('sandbox_enabled') else 0,
                 agent.get('summarize_tail', 5),
+                1 if agent.get('artifacts_enabled') is not False else 0,
             ))
             conn.commit()
         return agent['id']
