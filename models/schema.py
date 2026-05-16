@@ -371,6 +371,12 @@ class SchemaMixin:
                 except sqlite3.OperationalError:
                     pass
 
+            # Migration: add artifacts_enabled (default ON for all agents)
+            try:
+                cursor.execute("ALTER TABLE agents ADD COLUMN artifacts_enabled BOOLEAN DEFAULT 1")
+            except sqlite3.OperationalError:
+                pass
+
             # Migration: add last_active_at to track most recently chatted agent
             try:
                 cursor.execute("ALTER TABLE agents ADD COLUMN last_active_at TIMESTAMP")

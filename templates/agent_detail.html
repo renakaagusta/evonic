@@ -90,6 +90,18 @@ html.dark #tab-skills .border-amber-200 { border-color: #92400e !important; }
 html.dark #tab-skills .text-amber-800 { color: #fcd34d !important; }
 html.dark #tab-skills .text-amber-600 { color: #fbbf24 !important; }
 html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
+/* Dark mode: Artifacts tab */
+html.dark #tab-artifacts .bg-white { background: #1f2937 !important; }
+html.dark #tab-artifacts .border-gray-200 { border-color: #374151 !important; }
+html.dark #tab-artifacts .text-gray-800 { color: #f3f4f6 !important; }
+html.dark #tab-artifacts .text-gray-400 { color: #9ca3af !important; }
+html.dark #tab-artifacts .text-gray-500 { color: #9ca3af !important; }
+html.dark #tab-artifacts .hover\:bg-gray-100:hover { background: #374151 !important; }
+html.dark #tab-artifacts .bg-gray-50 { background: #374151 !important; }
+html.dark #tab-artifacts .text-gray-600 { color: #d1d5db !important; }
+html.dark #tab-artifacts .text-red-500 { color: #f87171 !important; }
+html.dark #tab-artifacts .hover\:text-red-700:hover { color: #fca5a5 !important; }
+html.dark #tab-artifacts .bg-red-50 { background: #451a1a !important; }
 /* Dark mode: Channel detail modal */
 html.dark #channel-detail-modal .bg-gray-50 { background: #374151 !important; }
 html.dark #channel-detail-modal .border-gray-100 { border-color: #4b5563 !important; }
@@ -168,6 +180,9 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
         {% endif %}
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('channels')" data-tab="channels">Channels</button>
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('portals')" data-tab="portals">Portals</button>
+        {% if agent.artifacts_enabled %}
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('artifacts')" data-tab="artifacts">Artifacts</button>
+        {% endif %}
     </div>
 
     <!-- Settings Tab -->
@@ -270,6 +285,15 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                     <input type="number" id="agent-attachment-max-mb" min="1" max="20" value="{{ agent.attachment_max_size_mb if agent.attachment_max_size_mb is not none else 20 }}" class="w-20 p-1.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
                     <span class="text-xs text-gray-400">Telegram hard-caps at 20 MB.</span>
                 </div>
+            </div>
+            <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    {{ toggle_widget(id='agent-artifacts', checked=agent.artifacts_enabled) }}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Artifacts (Saved Files)</span>
+                        <p class="text-xs text-gray-400 mt-0.5">Allow agent to save files (reports, analysis, images, etc.) to its artifacts directory. When enabled, the agent's SYSTEM.md is updated with instructions to use the <code>save_artifact</code> tool. Files appear in the Artifacts tab.</p>
+                    </div>
+                </label>
             </div>
             <div class="mb-4">
                 <label class="flex items-center gap-3 cursor-pointer select-none">
@@ -477,6 +501,57 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                 <!-- Portals loaded dynamically -->
             </div>
             <div id="portals-empty" class="hidden text-center py-8 text-gray-400 text-sm">No portals configured. Add a portal to give this agent access to files on another machine or directory via /_portal/ paths.</div>
+        </div>
+    </div>
+
+    <!-- Artifacts Tab -->
+    <div id="tab-artifacts" class="tab-content hidden flex-1 min-h-0 overflow-y-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6 max-w-5xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Artifacts</h3>
+            </div>
+
+            <!-- Search & Sort Bar -->
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <div class="relative flex-1 min-w-[200px]">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <input type="text" id="artifacts-search" placeholder="Search artifacts..." oninput="filterArtifacts()"
+                        class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                </div>
+                <select id="artifacts-sort" onchange="loadArtifacts()"
+                    class="p-2 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                    <option value="newest">Newest</option>
+                    <option value="updated">Last Updated</option>
+                    <option value="alpha">Alphabetical A-Z</option>
+                    <option value="alpha_desc">Alphabetical Z-A</option>
+                </select>
+            </div>
+
+            <!-- Filter Chips -->
+            <div class="flex flex-wrap gap-2 mb-4" id="artifacts-filter-chips">
+                <button class="artifacts-filter-chip px-3 py-1.5 text-xs font-medium rounded-full border border-indigo-500 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400" data-type="all" onclick="setArtifactFilter('all')">All</button>
+                <button class="artifacts-filter-chip px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700" data-type="document" onclick="setArtifactFilter('document')">Document</button>
+                <button class="artifacts-filter-chip px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700" data-type="text" onclick="setArtifactFilter('text')">Text</button>
+                <button class="artifacts-filter-chip px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700" data-type="image" onclick="setArtifactFilter('image')">Image</button>
+                <button class="artifacts-filter-chip px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700" data-type="sound" onclick="setArtifactFilter('sound')">Sound</button>
+                <button class="artifacts-filter-chip px-3 py-1.5 text-xs font-medium rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700" data-type="data" onclick="setArtifactFilter('data')">Data / Other</button>
+            </div>
+
+            <!-- Artifacts Grid -->
+            <div id="artifacts-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- Artifacts loaded dynamically -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="artifacts-empty" class="hidden text-center py-12 text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"></path>
+                </svg>
+                <p class="text-sm">No artifacts yet.</p>
+                <p class="text-xs mt-1">Artifacts are files that agents save during their work. When an agent produces a report, analysis, or any output, it can be saved here.</p>
+            </div>
         </div>
     </div>
 
@@ -1213,6 +1288,7 @@ function showTab(name) {
     if (name === 'skills') loadSkills();
     if (name === 'channels') loadChannels();
     if (name === 'portals') loadPortals();
+    if (name === 'artifacts') loadArtifacts();
     if (name === 'chat' && !chatLoaded) { loadChatHistory(); refreshSessionState(); refreshAgentState(); }
 
     if (name === 'chat') {
@@ -1393,6 +1469,7 @@ async function saveGeneral() {
             safety_checker_enabled: document.getElementById('agent-safety-checker').checked ? 1 : 0,
             inject_agent_id: document.getElementById('agent-inject-id').checked ? 1 : 0,
             inject_datetime: document.getElementById('agent-inject-datetime').checked ? 1 : 0,
+            artifacts_enabled: document.getElementById('agent-artifacts').checked ? 1 : 0,
         })
     });
     const data = await res.json();
@@ -3440,7 +3517,7 @@ setInterval(pollWorkplaceStatus, 5000);
 // ==================== Tab persistence ====================
 // Restore tab from URL hash on page load (same pattern as settings.html)
 (function() {
-    const valid = ['chat', 'general', 'knowledge', 'tools', 'channels', 'skills'];
+    const valid = ['chat', 'general', 'knowledge', 'tools', 'skills', 'channels', 'portals', 'artifacts'];
     const hash = location.hash.replace('#', '');
     window._tabInitHash = (hash && valid.includes(hash)) ? hash : 'chat';
     if (window._tabInitHash !== 'chat') {
@@ -3467,6 +3544,129 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+
+// ==================== Artifacts Tab ====================
+let _artifactsData = [];
+let _artifactsFilterType = 'all';
+
+async function loadArtifacts() {
+    const sort = document.getElementById('artifacts-sort').value;
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/artifacts?sort=${sort}`);
+        const data = await res.json();
+        _artifactsData = data.files || [];
+        renderArtifacts();
+    } catch(e) {
+        console.error('Failed to load artifacts:', e);
+    }
+}
+
+function renderArtifacts() {
+    const grid = document.getElementById('artifacts-grid');
+    const empty = document.getElementById('artifacts-empty');
+    
+    // Apply search filter
+    const query = (document.getElementById('artifacts-search').value || '').trim().toLowerCase();
+    let filtered = _artifactsData;
+    if (query) {
+        filtered = filtered.filter(f => f.filename.toLowerCase().includes(query));
+    }
+    
+    // Apply type filter
+    if (_artifactsFilterType !== 'all') {
+        filtered = filtered.filter(f => f.category === _artifactsFilterType);
+    }
+    
+    if (filtered.length === 0) {
+        grid.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+    
+    grid.innerHTML = filtered.map(f => {
+        const sizeStr = f.size < 1024 ? f.size + ' B' : f.size < 1048576 ? (f.size / 1024).toFixed(1) + ' KB' : (f.size / 1048576).toFixed(1) + ' MB';
+        const date = new Date(f.modified * 1000);
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const icon = getArtifactIcon(f.category);
+        const ext = f.filename.split('.').pop();
+        
+        return `
+            <div class="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors cursor-pointer flex flex-col" onclick="downloadArtifact('${f.filename}')">
+                <div class="flex items-center justify-center w-12 h-12 rounded-lg ${icon.bg} mb-3">
+                    <svg class="w-6 h-6 ${icon.color}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        ${icon.path}
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate" title="${f.filename}">${f.filename}</p>
+                    <p class="text-xs text-gray-400 mt-1">${sizeStr} &middot; ${dateStr}</p>
+                </div>
+                <div class="flex gap-1 mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                    <button onclick="event.stopPropagation(); downloadArtifact('${f.filename}')" title="Download" class="flex-1 text-center text-xs text-indigo-500 hover:text-indigo-700 py-1 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
+                        <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    </button>
+                    <button onclick="event.stopPropagation(); deleteArtifact('${f.filename}')" title="Delete" class="flex-1 text-center text-xs text-red-400 hover:text-red-600 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                        <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function getArtifactIcon(category) {
+    switch(category) {
+        case 'document':
+            return { bg: 'bg-blue-50 dark:bg-blue-900/20', color: 'text-blue-500', path: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>' };
+        case 'image':
+            return { bg: 'bg-green-50 dark:bg-green-900/20', color: 'text-green-500', path: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>' };
+        case 'sound':
+            return { bg: 'bg-purple-50 dark:bg-purple-900/20', color: 'text-purple-500', path: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>' };
+        case 'text':
+            return { bg: 'bg-amber-50 dark:bg-amber-900/20', color: 'text-amber-500', path: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>' };
+        default:
+            return { bg: 'bg-gray-50 dark:bg-gray-800', color: 'text-gray-500', path: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>' };
+    }
+}
+
+function filterArtifacts() {
+    renderArtifacts();
+}
+
+function setArtifactFilter(type) {
+    _artifactsFilterType = type;
+    document.querySelectorAll('.artifacts-filter-chip').forEach(chip => {
+        if (chip.dataset.type === type) {
+            chip.classList.add('border-indigo-500', 'text-indigo-600', 'bg-indigo-50', 'dark:bg-indigo-900/20', 'dark:text-indigo-400');
+            chip.classList.remove('border-gray-300', 'text-gray-600', 'hover:bg-gray-50', 'dark:border-gray-600', 'dark:text-gray-400', 'dark:hover:bg-gray-700');
+        } else {
+            chip.classList.remove('border-indigo-500', 'text-indigo-600', 'bg-indigo-50', 'dark:bg-indigo-900/20', 'dark:text-indigo-400');
+            chip.classList.add('border-gray-300', 'text-gray-600', 'hover:bg-gray-50', 'dark:border-gray-600', 'dark:text-gray-400', 'dark:hover:bg-gray-700');
+        }
+    });
+    renderArtifacts();
+}
+
+function downloadArtifact(filename) {
+    window.open(`/api/agents/${AGENT_ID}/artifacts/${filename}`, '_blank');
+}
+
+async function deleteArtifact(filename) {
+    if (!confirm(`Delete artifact "${filename}"?`)) return;
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/artifacts/${filename}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Artifact deleted.', 'success');
+            loadArtifacts();
+        } else {
+            showToast(data.error || 'Failed to delete artifact.', 'error');
+        }
+    } catch(e) {
+        showToast('Network error.', 'error');
+    }
+}
 // ==================== Clone Agent ====================
 function showCloneModal() {
     // Remove existing clone modal if any

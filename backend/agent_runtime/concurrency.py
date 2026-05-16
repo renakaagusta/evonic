@@ -4,30 +4,42 @@ Turn-level concurrency limiting for AgentRuntime.
 ConcurrencyGate: resizable semaphore using Condition+counter.
 ConcurrencyManager: per-agent and per-model gates.
 """
+import logging
 import threading
 from contextlib import contextmanager
 from typing import Dict, Optional
+
+_logger = logging.getLogger(__name__)
 
 
 class ConcurrencyGate:
     """A resizable semaphore. max_concurrent=0 means unlimited."""
 
-    def __init__(self, max_concurrent: int = 0):
+    def __init__(self, max_concurrent: int = 0, name: str = ""):
         self._lock = threading.Lock()
         self._condition = threading.Condition(self._lock)
         self._active = 0
         self._max = max_concurrent
+        self._name = name
 
     def acquire(self) -> None:
+        _logger.info("[LOCK] acquire(name=%s) - WAITING (active=%d/%d)",
+                      self._name, self._active, self._max)
         with self._condition:
             while self._max > 0 and self._active >= self._max:
                 self._condition.wait()
             self._active += 1
+            _logger.info("[LOCK] acquire(name=%s) - ACQUIRED (active=%d/%d)",
+                         self._name, self._active, self._max)
 
     def release(self) -> None:
+        _logger.info("[LOCK] release(name=%s) - RELEASING (active=%d/%d)",
+                      self._name, self._active, self._max)
         with self._condition:
             self._active -= 1
             self._condition.notify()
+        _logger.info("[LOCK] release(name=%s) - RELEASED (active=%d/%d)",
+                     self._name, self._active, self._max)
 
     def set_max(self, new_max: int) -> None:
         with self._condition:
@@ -90,13 +102,15 @@ class ConcurrencyManager:
     def _get_agent_gate(self, agent_id: str) -> ConcurrencyGate:
         with self._gates_lock:
             if agent_id not in self._agent_gates:
-                self._agent_gates[agent_id] = ConcurrencyGate(self._default_agent_limit)
+                self._agent_gates[agent_id] = ConcurrencyGate(
+                    self._default_agent_limit, name=f"agent:{agent_id}")
             return self._agent_gates[agent_id]
 
     def _get_model_gate(self, model_id: str) -> ConcurrencyGate:
         with self._gates_lock:
             if model_id not in self._model_gates:
-                self._model_gates[model_id] = ConcurrencyGate(self._load_model_limit(model_id))
+                self._model_gates[model_id] = ConcurrencyGate(
+                    self._load_model_limit(model_id), name=f"model:{model_id}")
             return self._model_gates[model_id]
 
     # ── Public API ────────────────────────────────────────────────────────────

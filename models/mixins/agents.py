@@ -26,8 +26,8 @@ class AgentMixin:
             cursor.execute("""
                 INSERT INTO agents (id, name, description, system_prompt, model, is_super, enabled,
                     vision_enabled, inject_agent_id, inject_datetime, send_intermediate_responses, enable_agent_state,
-                    workspace, agent_messaging_enabled, sandbox_enabled, summarize_tail)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    workspace, agent_messaging_enabled, sandbox_enabled, summarize_tail, artifacts_enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 agent['id'], agent.get('name', agent['id']),
                 agent.get('description', ''), agent.get('system_prompt', ''),
@@ -55,7 +55,7 @@ class AgentMixin:
                    'enabled', 'is_super', 'sandbox_enabled', 'safety_checker_enabled', 'primary_channel_id',
                    'avatar_path', 'disable_parallel_tool_execution', 'disable_turn_prefetch',
                    'agent_messaging_enabled', 'workplace_id',
-                   'attachments_enabled', 'attachment_max_size_mb'}
+                   'attachments_enabled', 'attachment_max_size_mb', 'artifacts_enabled'}
         updates = {k: v for k, v in data.items() if k in allowed}
         if not updates:
             return False

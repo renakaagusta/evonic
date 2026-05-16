@@ -1,0 +1,36 @@
+{
+  "id": "save_artifact",
+  "name": "Save Artifact",
+  "description": "Save a file to this agent's artifacts directory. Use this after completing analysis, generating reports, creating images, building PDFs, or producing any output file. Files are stored under shared/agents/<agent-id>/artifacts/ and are accessible via the web UI.",
+  "function": {
+    "name": "save_artifact",
+    "description": "Save a file to this agent's artifacts directory. Use this after completing analysis, generating reports, creating images, building PDFs, or producing any output file. Files are stored under shared/agents/<agent-id>/artifacts/ and are accessible via the web UI.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "The filename for the artifact (e.g. 'report.md', 'analysis.txt', 'output.json'). Must not contain path separators."
+        },
+        "content": {
+          "type": "string",
+          "description": "The text content of the artifact file."
+        },
+        "mime_type": {
+          "type": "string",
+          "description": "Optional MIME type hint (e.g. 'text/markdown', 'application/json')."
+        }
+      },
+      "required": ["filename", "content"]
+    }
+  },
+  "mock_response": {
+    "result": "Artifact saved successfully",
+    "filepath": "shared/agents/<agent-id>/artifacts/report.md",
+    "filename": "report.md",
+    "size": 1024
+  },
+  "mock_response_type": "json",
+  "created_at": "2026-05-16T20:08:05.000000",
+  "updated_at": "2026-05-16T20:08:05.000000"
+}

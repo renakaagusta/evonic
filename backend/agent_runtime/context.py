@@ -167,6 +167,32 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
             parts.append("- **KB vs Remember**: Use `read` for reference documents, guides, and long-form content. Use `remember` for short, searchable facts you want to recall across conversations.")
             parts.append("- **Best practices**: Store structured reference material in KB (specs, API docs, conventions). Keep each file focused on one topic. Update KB files when information changes.")
 
+            # Inject notes.md instructions only if notes.md exists in KB
+            if 'notes.md' in files:
+                parts.append("")
+                parts.append("### Notes.md - User Preferences & Instructions")
+                parts.append(
+                    "You have a `notes.md` file in your KB. This file is your primary location "
+                    "for storing your user's personal preferences, tastes, language preferences, "
+                    "and communication style instructions."
+                )
+                parts.append("")
+                parts.append("**Use notes.md for:**")
+                parts.append("- User's preferred language (e.g., 'User prefers Bahasa Indonesia')")
+                parts.append("- Communication style preferences (e.g., 'User likes concise answers', 'User dislikes emoji')")
+                parts.append("- Personal instructions (e.g., 'Call the user Pak')")
+                parts.append("- Tastes and preferences (e.g., 'User prefers bullet points over paragraphs')")
+                parts.append("")
+                parts.append("**Do NOT put in notes.md -- use `remember` instead:**")
+                parts.append("- Factual/memorization data: addresses, phone numbers, email, birthday")
+                parts.append("- Secret/sensitive data: passwords, tokens, PINs, secret codes, bank accounts")
+                parts.append("")
+                parts.append("**Usage rules:**")
+                parts.append("- Read this file: `read(\"notes.md\")`")
+                parts.append("- Update via `write_file` with path `/_self/kb/notes.md`")
+                parts.append("- Update immediately when the user communicates a new preference")
+                parts.append("- Prioritize notes.md over `remember` for non-factual preference information")
+
     # List available skills with SYSTEM.md so the agent knows what it can load
     skills_mgr = SkillsManager()
     _allowed_skills = None if agent.get('is_super') else set(db.get_agent_skills(eid))
