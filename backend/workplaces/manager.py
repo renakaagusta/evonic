@@ -228,7 +228,7 @@ class WorkplaceManager:
         self._set_status(workplace_id, 'connecting')
         try:
             from backend.workplaces.backends.remote_workplace import RemoteWorkplaceBackend
-            backend = RemoteWorkplaceBackend(config=config)
+            backend = RemoteWorkplaceBackend(config=config, workplace_id=workplace_id)
             with self._lock:
                 self._backends[workplace_id] = backend
             self._set_status(workplace_id, 'connected')

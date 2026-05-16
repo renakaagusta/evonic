@@ -93,6 +93,7 @@ def execute(agent_context: dict, args: dict) -> dict:
             password=password or None,
             key_path=key_path or None,
             passphrase=passphrase or None,
+            session_id=session_id,
         )
     except RuntimeError as e:
         return {'error': str(e)}

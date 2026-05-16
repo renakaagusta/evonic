@@ -19,6 +19,7 @@ import threading
 import time
 
 from backend.tools.lib.exec_backend import ExecutionBackend, truncate
+from backend.tools.lib.process_tracker import process_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +228,22 @@ def _docker(*args, input_data: str = None, timeout: int = 30) -> subprocess.Comp
     )
 
 
+def _docker_popen(*args) -> subprocess.Popen:
+    """Like _docker() but returns a Popen object for interruptible execution.
+
+    The caller is responsible for calling proc.communicate(input=..., timeout=...)
+    in a polling loop to allow external kill via process_tracker.
+    """
+    cmd = ['docker'] + list(args)
+    return subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
 def _evict_lru() -> None:
     with _pool_lock:
         if not _containers:
@@ -407,10 +424,19 @@ class DockerBackend(ExecutionBackend):
 
         cmd = ['exec', '-i'] + env_args + [container_id, 'bash', '-s']
         t0 = time.time()
+        proc = _docker_popen(*cmd)
+        process_tracker.register(self._session_id, proc, proc.pid)
         try:
-            proc = _docker(*cmd, input_data=_PATH_PREFIX + script, timeout=timeout + 5)
-        except subprocess.TimeoutExpired:
-            return {'error': f'Execution timed out after {timeout}s', 'exit_code': -1}
+            stdout, stderr = self._poll_proc(proc, _PATH_PREFIX + script, timeout + 5, t0)
+            if stdout is None:
+                # Process was killed externally
+                return {
+                    'error': 'Execution stopped by user',
+                    'exit_code': -9,
+                    'execution_time': round(time.time() - t0, 3),
+                }
+        finally:
+            process_tracker.unregister(self._session_id)
 
         elapsed = round(time.time() - t0, 3)
         with _pool_lock:
@@ -420,8 +446,8 @@ class DockerBackend(ExecutionBackend):
                     break
 
         return {
-            'stdout': truncate(proc.stdout, _MAX_OUTPUT_BYTES),
-            'stderr': truncate(proc.stderr, _MAX_OUTPUT_BYTES),
+            'stdout': truncate(stdout, _MAX_OUTPUT_BYTES),
+            'stderr': truncate(stderr, _MAX_OUTPUT_BYTES),
             'exit_code': proc.returncode,
             'execution_time': elapsed,
         }
@@ -463,6 +489,46 @@ class DockerBackend(ExecutionBackend):
 
         return result
 
+    @staticmethod
+    def _poll_proc(proc, input_data: str, timeout: int, t0: float):
+        """Poll a Popen process in 1s intervals, returning (stdout, stderr).
+
+        Returns (None, None) if the process was killed externally (by
+        process_tracker).  Raises no exceptions — timeout is detected
+        internally and stored as proc._timed_out flag.
+        """
+        deadline = t0 + timeout
+        while True:
+            try:
+                stdout, stderr = proc.communicate(input=input_data, timeout=1)
+                input_data = None  # only send input on first call
+                # Process finished — check if it was killed by signal
+                if proc.returncode is not None and proc.returncode < 0:
+                    return None, None
+                return stdout, stderr
+            except subprocess.TimeoutExpired:
+                input_data = None  # already consumed
+                # Check if killed externally during the 1s window
+                if proc.poll() is not None:
+                    if proc.returncode < 0:
+                        return None, None
+                    # Process exited with code >= 0 — read remaining output
+                    try:
+                        stdout, stderr = proc.communicate(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        stdout, stderr = proc.communicate(timeout=2)
+                    return stdout, stderr
+                # Check deadline
+                if time.time() > deadline:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=2)
+                    return None, None  # caller interprets as timeout
+
     def _run_code(self, container_id: str, code: str, timeout: int, env: dict) -> dict:
         env_args = []
         for k, v in env.items():
@@ -470,10 +536,24 @@ class DockerBackend(ExecutionBackend):
 
         cmd = ['exec', '-i'] + env_args + [container_id, 'python3', '-']
         t0 = time.time()
+        proc = _docker_popen(*cmd)
+        process_tracker.register(self._session_id, proc, proc.pid)
         try:
-            proc = _docker(*cmd, input_data=code, timeout=timeout + 5)
-        except subprocess.TimeoutExpired:
-            return {'error': f'Execution timed out after {timeout}s', 'exit_code': -1}
+            stdout, stderr = self._poll_proc(proc, code, timeout + 5, t0)
+            if stdout is None:
+                if proc.returncode is not None and proc.returncode < 0:
+                    return {
+                        'error': 'Execution stopped by user',
+                        'exit_code': -9,
+                        'execution_time': round(time.time() - t0, 3),
+                    }
+                return {
+                    'error': f'Execution timed out after {timeout}s',
+                    'exit_code': -1,
+                    'execution_time': round(time.time() - t0, 3),
+                }
+        finally:
+            process_tracker.unregister(self._session_id)
 
         elapsed = round(time.time() - t0, 3)
         with _pool_lock:
@@ -483,8 +563,8 @@ class DockerBackend(ExecutionBackend):
                     break
 
         return {
-            'stdout': truncate(proc.stdout, _MAX_OUTPUT_BYTES),
-            'stderr': truncate(proc.stderr, _MAX_OUTPUT_BYTES),
+            'stdout': truncate(stdout, _MAX_OUTPUT_BYTES),
+            'stderr': truncate(stderr, _MAX_OUTPUT_BYTES),
             'exit_code': proc.returncode,
             'execution_time': elapsed,
         }

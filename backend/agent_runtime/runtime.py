@@ -756,12 +756,16 @@ class AgentRuntime:
 
     def request_stop(self, session_id: str) -> None:
         """Signal the agent loop for this session to stop after the current LLM call.
-        Also cancels any pending buffer timer so no new task is enqueued."""
+        Also cancels any pending buffer timer so no new task is enqueued.
+        Kills any running tool subprocess immediately via process_tracker."""
         with self._buffer_lock:
             timer = self._buffer_timers.pop(session_id, None)
         if timer is not None:
             timer.cancel()
         self._get_stop_event(session_id).set()
+        # Kill any running tool subprocess for this session
+        from backend.tools.lib.process_tracker import process_tracker
+        process_tracker.kill(session_id)
 
     def handle_message(self, agent_id: str, external_user_id: str,
                        message: str, channel_id: Optional[str] = None,

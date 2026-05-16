@@ -25,15 +25,17 @@ from backend.tools.lib.exec_backend import ExecutionBackend, file_stat_code, par
 class RemoteWorkplaceBackend(ExecutionBackend):
     """Executes commands on a remote server via SSH, auto-connecting from workplace config."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, workplace_id: str = ''):
         self._config = config
         self._workspace = config.get('workspace_path')
+        self._workplace_id = workplace_id
         self._ssh = None
         self._connect()
 
     def _connect(self):
         from backend.tools.lib.backends.ssh_backend import SSHBackend
         cfg = self._config
+        ssh_session_id = f'workplace:{self._workplace_id}' if self._workplace_id else ''
         self._ssh = SSHBackend(
             host=cfg['host'],
             username=cfg['username'],
@@ -41,6 +43,7 @@ class RemoteWorkplaceBackend(ExecutionBackend):
             password=cfg.get('password') if cfg.get('auth_type') == 'password' else None,
             key_path=cfg.get('key_path') if cfg.get('auth_type') != 'password' else None,
             passphrase=cfg.get('passphrase'),
+            session_id=ssh_session_id,
         )
 
     def _cwd_prefix(self) -> str:

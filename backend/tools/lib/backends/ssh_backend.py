@@ -12,9 +12,11 @@ import base64
 import logging
 import os
 import shlex
+import threading
 import time
 
 from backend.tools.lib.exec_backend import ExecutionBackend, truncate, file_stat_code, parse_file_stat_output
+from backend.tools.lib.process_tracker import process_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,8 @@ class SSHBackend(ExecutionBackend):
     """Executes bash/python on a remote server via SSH."""
 
     def __init__(self, host: str, username: str, port: int = 22,
-                 password: str = None, key_path: str = None, passphrase: str = None):
+                 password: str = None, key_path: str = None, passphrase: str = None,
+                 session_id: str = ''):
         try:
             import paramiko
         except ImportError:
@@ -40,6 +43,10 @@ class SSHBackend(ExecutionBackend):
         self._passphrase = passphrase
         self._connected_at = None
         self._last_used = None
+        self._session_id = session_id
+        self._kill_flag = threading.Event()
+        self._remote_pid = None
+        self._active_channel = None
 
         self._client = paramiko.SSHClient()
         self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -81,16 +88,31 @@ class SSHBackend(ExecutionBackend):
             self._host, self._port, self._username,
         )
 
-    def _exec_once(self, command: str, stdin_data: str, timeout: int) -> dict:
-        """Single execution attempt. Returns _connection_lost=True when transport dies mid-run."""
+    def _exec_once(self, command: str, stdin_data: str, timeout: int,
+                   _track_pid: bool = False) -> dict:
+        """Single execution attempt. Returns _connection_lost=True when transport dies mid-run.
+
+        Tracks the remote PID so kill() can send SIGTERM.
+        """
         # Health check before exec
         transport = self._client.get_transport()
         if transport is None or not transport.is_active():
             return {'error': 'Transport not active before exec', 'exit_code': -1, '_connection_lost': True}
 
+        # Clear kill flag for this execution
+        self._kill_flag.clear()
+        self._remote_pid = None
+        self._active_channel = None
+
+        # When tracking PID, prepend an echo of $$ to capture the remote process PID
+        effective_cmd = command
+        if _track_pid:
+            effective_cmd = 'echo "EVONIC_PID:$$"; ' + command
+
         t0 = time.time()
         try:
-            stdin, stdout, stderr = self._client.exec_command(command, timeout=timeout)
+            stdin, stdout, stderr = self._client.exec_command(effective_cmd, timeout=timeout)
+            self._active_channel = stdout.channel
             if stdin_data:
                 stdin.write(stdin_data)
                 stdin.channel.shutdown_write()
@@ -102,6 +124,20 @@ class SSHBackend(ExecutionBackend):
 
             while not channel.exit_status_ready():
                 now = time.time()
+
+                # Check for external kill request
+                if self._kill_flag.is_set():
+                    elapsed_so_far = round(now - t0, 1)
+                    logger.info(
+                        "[ssh_exec] KILL requested host=%s elapsed=%.1fs",
+                        self._host, elapsed_so_far,
+                    )
+                    channel.close()
+                    return {
+                        'error': 'Execution stopped by user',
+                        'exit_code': -9,
+                        'execution_time': elapsed_so_far,
+                    }
 
                 # Detect silent connection drop — keepalive marks transport inactive within ~15s
                 tr = self._client.get_transport()
@@ -134,8 +170,27 @@ class SSHBackend(ExecutionBackend):
                 time.sleep(0.05)
 
             exit_code = channel.recv_exit_status()
-            out = truncate(stdout.read().decode('utf-8', errors='replace'), _MAX_OUTPUT_BYTES)
+            raw_out = stdout.read().decode('utf-8', errors='replace')
+            out = truncate(raw_out, _MAX_OUTPUT_BYTES)
             err = truncate(stderr.read().decode('utf-8', errors='replace'), _MAX_OUTPUT_BYTES)
+
+            # Parse remote PID from first line if tracking
+            if _track_pid:
+                lines = raw_out.split('\n', 1)
+                if lines[0].startswith('EVONIC_PID:'):
+                    try:
+                        self._remote_pid = int(lines[0].split(':', 1)[1].strip())
+                        logger.info(
+                            "[ssh_exec] Captured remote PID=%s host=%s",
+                            self._remote_pid, self._host,
+                        )
+                    except (ValueError, IndexError):
+                        self._remote_pid = None
+                    # Strip the PID line from output
+                    if len(lines) > 1:
+                        out = truncate(lines[1], _MAX_OUTPUT_BYTES)
+                    else:
+                        out = ''
 
         except Exception as e:
             elapsed = round(time.time() - t0, 3)
@@ -143,10 +198,12 @@ class SSHBackend(ExecutionBackend):
                 "[ssh_exec] EXCEPTION host=%s after %.3fs err=%r type=%s",
                 self._host, elapsed, str(e), type(e).__name__,
             )
+            self._active_channel = None
             return {'error': str(e), 'exit_code': -1}
 
         elapsed = round(time.time() - t0, 3)
         self._last_used = time.time()
+        self._active_channel = None
         logger.debug("[ssh_exec] DONE host=%s exit_code=%s elapsed=%ss", self._host, exit_code, elapsed)
         return {
             'stdout': out,
@@ -155,15 +212,46 @@ class SSHBackend(ExecutionBackend):
             'execution_time': elapsed,
         }
 
-    def _exec(self, command: str, stdin_data: str, timeout: int) -> dict:
+    def _force_stop(self):
+        """Kill the currently running remote process via SIGTERM."""
+        # Set the kill flag so _exec_once's polling loop exits
+        self._kill_flag.set()
+
+        # Try to close the active channel (terminates remote process)
+        channel = self._active_channel
+        if channel is not None and not channel.closed:
+            try:
+                channel.close()
+            except Exception:
+                pass
+
+        # Also send SIGTERM to the remote PID if known
+        if self._remote_pid:
+            try:
+                kill_stdin, kill_stdout, kill_stderr = self._client.exec_command(
+                    f'kill -TERM {self._remote_pid} 2>/dev/null; '
+                    f'sleep 0.1; '
+                    f'kill -KILL {self._remote_pid} 2>/dev/null',
+                    timeout=5,
+                )
+                kill_stdout.channel.close()
+            except Exception:
+                pass
+
+    def _exec(self, command: str, stdin_data: str, timeout: int,
+              _track_pid: bool = False) -> dict:
         """Run a command over SSH with transparent reconnect + exponential backoff on connection loss.
 
         The caller (and the agent's LLM loop) never sees a mid-run disconnect — this method
         blocks through reconnects and re-runs the command on the fresh connection.
         Up to _MAX_RETRIES (5) reconnect attempts; backoff: 1, 2, 4, 8, 16 seconds.
+
+        Args:
+            _track_pid: If True, prepend ``echo "EVONIC_PID:$$";`` to command
+                and parse the remote PID from the first stdout line.
         """
         for attempt in range(_MAX_RETRIES + 1):
-            result = self._exec_once(command, stdin_data, timeout)
+            result = self._exec_once(command, stdin_data, timeout, _track_pid=_track_pid)
 
             if not result.pop('_connection_lost', False):
                 # Success or non-connection error (timeout, bad exit code, etc.) — return as-is
@@ -200,12 +288,34 @@ class SSHBackend(ExecutionBackend):
 
         return {'error': f'SSH connection lost after {_MAX_RETRIES} reconnect attempts', 'exit_code': -1}
 
+    def _tracked_exec(self, command: str, stdin_data: str, timeout: int) -> dict:
+        """Run an SSH command with PID tracking for kill support.
+
+        Wraps the command to capture the remote PID, registers with
+        process_tracker, and unregisters on completion.
+        """
+        # We use process_tracker with a custom object that delegates to _force_stop
+        class _SSHKillHandle:
+            __slots__ = ('_backend',)
+            def __init__(self, backend):
+                self._backend = backend
+            def kill(self):
+                self._backend._force_stop()
+
+        handle = _SSHKillHandle(self)
+        # Use a unique placeholder PID for logging (real remote PID captured inside _exec_once)
+        process_tracker.register(self._session_id, handle, 0)
+        try:
+            return self._exec(command, stdin_data, timeout, _track_pid=True)
+        finally:
+            process_tracker.unregister(self._session_id)
+
     def run_bash(self, script: str, timeout: int, env: dict) -> dict:
         # Prepend env exports before the script
         env_prefix = ''.join(
             f"export {k}={_shell_quote(v)}\n" for k, v in env.items()
         )
-        return self._exec('bash -s', env_prefix + script, timeout)
+        return self._tracked_exec('bash -s', env_prefix + script, timeout)
 
     def run_python(self, code: str, timeout: int, env: dict) -> dict:
         env_prefix = ''.join(
@@ -213,7 +323,7 @@ class SSHBackend(ExecutionBackend):
         )
         # Wrap: set env vars in shell, then pipe code to python3
         wrapper = env_prefix + 'python3 -'
-        return self._exec('bash -c ' + _shell_quote(wrapper), code, timeout)
+        return self._tracked_exec('bash -c ' + _shell_quote(wrapper), code, timeout)
 
     def file_exists(self, path: str) -> bool:
         r = self._exec(f'test -e {shlex.quote(path)} && echo yes || echo no', '', 5)

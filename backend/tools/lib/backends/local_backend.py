@@ -9,6 +9,7 @@ import subprocess
 import time
 
 from backend.tools.lib.exec_backend import ExecutionBackend, truncate
+from backend.tools.lib.process_tracker import process_tracker
 
 try:
     from config import SANDBOX_WORKSPACE
@@ -44,28 +45,78 @@ _ensure_evonic_symlink()
 class LocalBackend(ExecutionBackend):
     """Executes bash/python directly on the host (no sandboxing)."""
 
-    def __init__(self, workspace: str = None):
+    def __init__(self, session_id: str = '', workspace: str = None):
+        self._session_id = session_id
         self._workspace = workspace
 
     def _cwd(self) -> str:
         return os.path.abspath(self._workspace or SANDBOX_WORKSPACE)
 
+    @staticmethod
+    def _poll_proc(proc, input_data: str, timeout: int, t0: float):
+        """Poll a Popen process in 1s intervals, returning (stdout, stderr).
+
+        Returns (None, None) if the process was killed externally (by
+        process_tracker) or timed out.
+        """
+        deadline = t0 + timeout
+        while True:
+            try:
+                stdout, stderr = proc.communicate(input=input_data, timeout=1)
+                input_data = None
+                if proc.returncode is not None and proc.returncode < 0:
+                    return None, None
+                return stdout, stderr
+            except subprocess.TimeoutExpired:
+                input_data = None
+                if proc.poll() is not None:
+                    if proc.returncode < 0:
+                        return None, None
+                    try:
+                        stdout, stderr = proc.communicate(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        stdout, stderr = proc.communicate(timeout=2)
+                    return stdout, stderr
+                if time.time() > deadline:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=2)
+                    return None, None
+
     def run_bash(self, script: str, timeout: int, env: dict) -> dict:
         run_env = dict(os.environ)
         run_env.update(env)
         t0 = time.time()
+        proc = subprocess.Popen(
+            ['bash', '-s'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, cwd=self._cwd(), env=run_env,
+        )
+        process_tracker.register(self._session_id, proc, proc.pid)
         try:
-            proc = subprocess.run(
-                ['bash', '-s'],
-                input=script, capture_output=True, text=True,
-                timeout=timeout, cwd=self._cwd(), env=run_env,
-            )
-        except subprocess.TimeoutExpired:
-            return {'error': f'Execution timed out after {timeout}s', 'exit_code': -1}
+            stdout, stderr = self._poll_proc(proc, script, timeout, t0)
+            if stdout is None:
+                if proc.returncode is not None and proc.returncode < 0:
+                    return {
+                        'error': 'Execution stopped by user',
+                        'exit_code': -9,
+                        'execution_time': round(time.time() - t0, 3),
+                    }
+                return {
+                    'error': f'Execution timed out after {timeout}s',
+                    'exit_code': -1,
+                    'execution_time': round(time.time() - t0, 3),
+                }
+        finally:
+            process_tracker.unregister(self._session_id)
         elapsed = round(time.time() - t0, 3)
         return {
-            'stdout': truncate(proc.stdout, _MAX_OUTPUT_BYTES),
-            'stderr': truncate(proc.stderr, _MAX_OUTPUT_BYTES),
+            'stdout': truncate(stdout, _MAX_OUTPUT_BYTES),
+            'stderr': truncate(stderr, _MAX_OUTPUT_BYTES),
             'exit_code': proc.returncode,
             'execution_time': elapsed,
         }
@@ -73,22 +124,35 @@ class LocalBackend(ExecutionBackend):
     def run_python(self, code: str, timeout: int, env: dict) -> dict:
         run_env = dict(os.environ)
         run_env.update(env)
-        # Make the evonic helpers (runpy_helpers/) importable as 'evonic'
         existing = run_env.get('PYTHONPATH', '')
         run_env['PYTHONPATH'] = f"{_HELPERS_PARENT_DIR}{os.pathsep}{existing}".rstrip(os.pathsep)
         t0 = time.time()
+        proc = subprocess.Popen(
+            ['python3', '-'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, cwd=self._cwd(), env=run_env,
+        )
+        process_tracker.register(self._session_id, proc, proc.pid)
         try:
-            proc = subprocess.run(
-                ['python3', '-'],
-                input=code, capture_output=True, text=True,
-                timeout=timeout, cwd=self._cwd(), env=run_env,
-            )
-        except subprocess.TimeoutExpired:
-            return {'error': f'Execution timed out after {timeout}s', 'exit_code': -1}
+            stdout, stderr = self._poll_proc(proc, code, timeout, t0)
+            if stdout is None:
+                if proc.returncode is not None and proc.returncode < 0:
+                    return {
+                        'error': 'Execution stopped by user',
+                        'exit_code': -9,
+                        'execution_time': round(time.time() - t0, 3),
+                    }
+                return {
+                    'error': f'Execution timed out after {timeout}s',
+                    'exit_code': -1,
+                    'execution_time': round(time.time() - t0, 3),
+                }
+        finally:
+            process_tracker.unregister(self._session_id)
         elapsed = round(time.time() - t0, 3)
         return {
-            'stdout': truncate(proc.stdout, _MAX_OUTPUT_BYTES),
-            'stderr': truncate(proc.stderr, _MAX_OUTPUT_BYTES),
+            'stdout': truncate(stdout, _MAX_OUTPUT_BYTES),
+            'stderr': truncate(stderr, _MAX_OUTPUT_BYTES),
             'exit_code': proc.returncode,
             'execution_time': elapsed,
         }
