@@ -7,7 +7,7 @@ import re
 import json
 import uuid
 import queue
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from flask import Blueprint, render_template, jsonify, request, Response, stream_with_context
 from models.db import db
 from models.chatlog import chatlog_manager, _DISPLAY_TYPES
@@ -29,6 +29,15 @@ def _sanitize_agents(agents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     for a in agents:
         _sanitize_agent(a)
     return agents
+
+
+def _apply_sandbox_workplace_policy(agent_data: dict, workplace_id: Optional[str]) -> None:
+    """Docker sandbox is only supported on local workplaces."""
+    if not workplace_id:
+        return
+    workplace = db.get_workplace(workplace_id)
+    if workplace and workplace.get('type') in ('remote', 'cloud'):
+        agent_data['sandbox_enabled'] = 0
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENTS_DIR = os.path.join(BASE_DIR, 'agents')
@@ -177,11 +186,7 @@ def api_create_agent():
         return jsonify({'error': 'Description too long (max 2000 characters).'}), 400
     if len(data.get('system_prompt', '')) > 102400:
         return jsonify({'error': 'System prompt too long (max 100 KB).'}), 400
-    # Docker Sandbox only available for local workplace mode
-    if data.get('sandbox_enabled') and data.get('workplace_id'):
-        workplace = db.get_workplace(data['workplace_id'])
-        if workplace and workplace.get('type') in ('remote', 'cloud'):
-            data['sandbox_enabled'] = 0
+    _apply_sandbox_workplace_policy(data, data.get('workplace_id'))
     try:
         _ensure_kb_dir(agent_id)
         # Set default workspace for regular agents to shared/agents/[agent-id]
@@ -207,12 +212,8 @@ def api_update_agent(agent_id):
     # Super agent cannot be disabled
     if existing.get('is_super') and data.get('enabled') is False:
         return jsonify({'error': 'Super agent cannot be disabled.'}), 403
-    # Docker Sandbox only available for local workplace mode
     target_workplace_id = data.get('workplace_id', existing.get('workplace_id'))
-    if data.get('sandbox_enabled') and target_workplace_id:
-        workplace = db.get_workplace(target_workplace_id)
-        if workplace and workplace.get('type') in ('remote', 'cloud'):
-            del data['sandbox_enabled']  # Do not overwrite existing value in database
+    _apply_sandbox_workplace_policy(data, target_workplace_id)
     if 'system_prompt' in data:
         _write_system_prompt(agent_id, data['system_prompt'])
     db.update_agent(agent_id, data)
