@@ -109,6 +109,29 @@ block content %}
             >
                 <div>
                     <div class="font-medium text-gray-800 dark:text-gray-100">
+                        Max Concurrent LLM (Global)
+                    </div>
+                    <div class="text-sm text-gray-500 mt-0.5">
+                        Hard cap on simultaneous LLM calls <em>across all</em>
+                        agents and models. 1 = serialised (default, safest for
+                        shared API keys). Increase only if your provider allows
+                        concurrent calls.
+                    </div>
+                </div>
+                <input
+                    type="number"
+                    id="max-concurrent-llm-global-input"
+                    min="1"
+                    max="20"
+                    oninput="markDirty()"
+                    class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+            </div>
+            <div
+                class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
+            >
+                <div>
+                    <div class="font-medium text-gray-800 dark:text-gray-100">
                         Agent Queue Workers
                     </div>
                     <div class="text-sm text-gray-500 mt-0.5">
@@ -1385,6 +1408,7 @@ block content %}
         document.getElementById("llm-max-retries-input").value = s.llm_max_retries;
         document.getElementById("max-concurrent-per-agent-input").value = s.max_concurrent_llm_per_agent;
         document.getElementById("max-concurrent-per-model-input").value = s.max_concurrent_llm_per_model;
+        document.getElementById("max-concurrent-llm-global-input").value = s.max_concurrent_llm_global;
         document.getElementById("agent-queue-workers-input").value = s.agent_queue_workers;
         document.getElementById("max-tool-iterations-input").value = s.max_tool_iterations;
         updateThemeButtons(s.theme);
@@ -1494,6 +1518,7 @@ block content %}
                 llm_max_retries: parseInt(document.getElementById("llm-max-retries-input").value, 10),
                 max_concurrent_llm_per_agent: parseInt(document.getElementById("max-concurrent-per-agent-input").value, 10),
                 max_concurrent_llm_per_model: parseInt(document.getElementById("max-concurrent-per-model-input").value, 10),
+                max_concurrent_llm_global: parseInt(document.getElementById("max-concurrent-llm-global-input").value, 10),
                 agent_queue_workers: parseInt(document.getElementById("agent-queue-workers-input").value, 10),
                 max_tool_iterations: parseInt(document.getElementById("max-tool-iterations-input").value, 10),
                 theme,

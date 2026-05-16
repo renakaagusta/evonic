@@ -693,6 +693,7 @@ def api_get_general_settings():
         'llm_max_retries': int(db.get_setting('llm_max_retries', '5')),
         'max_concurrent_llm_per_agent': int(db.get_setting('max_concurrent_llm_per_agent', '1')),
         'max_concurrent_llm_per_model': int(db.get_setting('max_concurrent_llm_per_model', '0')),
+        'max_concurrent_llm_global': int(db.get_setting('max_concurrent_llm_global', '1')),
         'agent_queue_workers': int(db.get_setting('agent_queue_workers', str(config.AGENT_QUEUE_WORKERS))),
         'max_tool_iterations': int(db.get_setting('max_tool_iterations', str(config.AGENT_MAX_TOOL_ITERATIONS))),
         'theme': db.get_setting('theme', 'system'),
@@ -761,6 +762,20 @@ def api_batch_save():
             results['max_concurrent_llm_per_model'] = value
         except (ValueError, TypeError) as e:
             errors.append(f'max_concurrent_llm_per_model: {e}')
+
+    # Max Concurrent LLM (Global) — controls _llm_lock BoundedSemaphore
+    if 'max_concurrent_llm_global' in settings:
+        try:
+            value = max(1, int(settings['max_concurrent_llm_global']))
+            db.set_setting('max_concurrent_llm_global', str(value))
+            try:
+                from backend.agent_runtime.runtime import AgentRuntime
+                AgentRuntime._llm_serializer.refresh_llm_global_limit()
+            except Exception:
+                pass
+            results['max_concurrent_llm_global'] = value
+        except (ValueError, TypeError) as e:
+            errors.append(f'max_concurrent_llm_global: {e}')
 
     # Agent Queue Workers
     if 'agent_queue_workers' in settings:

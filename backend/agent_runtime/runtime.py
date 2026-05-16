@@ -315,28 +315,29 @@ class _CleanupTracker:
 
 
 class _LLMSerializer:
-    """Serialize LLM access: summarization guard, per-model lock, concurrency manager.
+    """Serialize LLM access: summarization guard, global semaphore, concurrency manager.
 
     Thread-safety:
-        Two independent locks manage different aspects of LLM concurrency:
+        Two independent mechanisms manage different aspects of LLM concurrency:
 
         ┌────────────────────┬──────────────────────────────────────────────────────┐
-        │ Lock               │ Purpose                                              │
+        │ Mechanism          │ Purpose                                              │
         ├────────────────────┼──────────────────────────────────────────────────────┤
         │ _summarize_guard   │ Ensures only ONE summarization runs at a time.       │
         │                    │ Summarizations are expensive and may conflict with   │
         │                    │ active LLM turns for the same session.               │
         ├────────────────────┼──────────────────────────────────────────────────────┤
-        │ _llm_lock          │ Serialises ALL LLM API calls for single-slot         │
-        │                    │ backends that cannot handle parallel requests.       │
-        │                    │ Multi-slot backends may skip this lock.              │
+        │ _llm_lock          │ BoundedSemaphore that limits concurrent LLM API      │
+        │ (BoundedSemaphore) │ calls globally.  Controlled by the DB setting        │
+        │                    │ max_concurrent_llm_global (default 1).               │
+        │                    │ Set higher for providers that support parallel reqs. │
         └────────────────────┴──────────────────────────────────────────────────────┘
 
         Lock ordering: _summarize_guard MUST be acquired before _llm_lock
         if both are needed in the same code path.  In practice they are
         used independently.
 
-        Deadlock risk: NONE — neither lock is ever held while acquiring
+        Deadlock risk: NONE — neither is ever held while acquiring
         the other.  Both are short-held (< duration of the operation).
 
         _summarize_active invariant: the set contains session_ids that
@@ -354,18 +355,38 @@ class _LLMSerializer:
         self._summarize_active: set = set()
         self._summarize_guard = threading.Lock()
 
-        # Serialize LLM access for single-slot backends.
-        # Some LLM providers support only one concurrent request per API key.
+        # Global LLM concurrency limiter — replaces the old threading.Lock()
+        # (binary, max 1) with a BoundedSemaphore controlled by the DB setting
+        # max_concurrent_llm_global (default 1, preserving existing behaviour).
         # Acquired before each LLM call, released after response.
-        #
-        # NOTE: If any code path ever needs to re-acquire _llm_lock while
-        # already holding it (re-entrancy), replace this with threading.RLock().
-        # threading.Lock will deadlock on re-entrant acquisition.
-        self._llm_lock = threading.Lock()
+        # BoundedSemaphore raises ValueError on over-release — defensive.
+        limit = self._load_llm_global_limit()
+        self._llm_lock = threading.BoundedSemaphore(limit)
 
         # Per-agent/per-model turn concurrency manager (set in __init__).
         # Managed internally — no external locking required.
         self._concurrency_mgr = None
+
+    # ── Private helpers ─────────────────────────────────────────────────
+
+    def _load_llm_global_limit(self) -> int:
+        """Read max_concurrent_llm_global setting (default 1)."""
+        try:
+            from models.db import db
+            return max(1, int(db.get_setting('max_concurrent_llm_global', '1')))
+        except Exception:
+            return 1
+
+    # ── Public API ─────────────────────────────────────────────────────
+
+    def refresh_llm_global_limit(self) -> None:
+        """Re-read max_concurrent_llm_global and recreate the BoundedSemaphore.
+
+        Threads already blocked on the old semaphore will drain naturally.
+        """
+        new_limit = self._load_llm_global_limit()
+        _logger.info("_llm_lock: refreshing global semaphore limit → %d", new_limit)
+        self._llm_lock = threading.BoundedSemaphore(new_limit)
 
 
 class _ShutdownManager:
