@@ -7,8 +7,10 @@ def execute(agent: dict, args: dict) -> dict:
     agent_id = agent.get('id', '')
 
     action_config = args.get('action_config', {})
-    # Default agent_message target to the calling agent
-    if args.get('action_type') == 'agent_message' and 'agent_id' not in action_config:
+    action_type = args.get('action_type', '')
+    # Default target to the calling agent for message-type actions.
+    # agent_message is a deprecated alias for static_message.
+    if action_type in ('static_message', 'agent_message', 'session_prompt') and 'agent_id' not in action_config:
         action_config['agent_id'] = agent_id
 
     try:

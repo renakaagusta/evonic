@@ -12,7 +12,7 @@ Usage:
         owner_type='agent', owner_id='agent-1',
         trigger_type='date',
         trigger_config={'run_date': '2026-04-21T09:00:00'},
-        action_type='agent_message',
+        action_type='static_message',
         action_config={'agent_id': 'agent-1', 'message': 'Time for standup!'},
     )
 
@@ -300,9 +300,13 @@ class Scheduler:
             if action_type == 'emit_event':
                 self._action_emit_event(action_config)
                 action_summary = f"Emitted event '{action_config.get('event_name', '?')}'"
-            elif action_type == 'agent_message':
-                self._action_agent_message(action_config)
+            elif action_type in ('static_message', 'agent_message'):
+                # agent_message is a deprecated alias for static_message
+                self._action_static_message(action_config)
                 action_summary = f"Sent message to agent '{action_config.get('agent_id', '?')}'"
+            elif action_type == 'session_prompt':
+                self._action_session_prompt(action_config)
+                action_summary = f"Sent prompt to agent '{action_config.get('agent_id', '?')}'"
             elif action_type == 'webhook':
                 status_code = self._action_webhook(action_config)
                 method = action_config.get('method', 'POST').upper()
@@ -361,7 +365,13 @@ class Scheduler:
         payload = config.get('payload', {})
         event_stream.emit(event_name, payload)
 
-    def _action_agent_message(self, config: dict):
+    def _action_static_message(self, config: dict):
+        """Deliver a pre-composed message directly to the user, bypassing the LLM.
+
+        This is the canonical name; the deprecated 'agent_message' maps here.
+        The message was already composed at schedule-creation time — we just
+        need to deliver it to the user's session (and push via channel).
+        """
         from backend.agent_runtime import agent_runtime
         from backend.channels.registry import channel_manager
         from models.db import db as main_db
@@ -381,7 +391,7 @@ class Scheduler:
                 external_user_id = human_session['external_user_id']
                 channel_id = channel_id or human_session.get('channel_id')
                 log.info(
-                    "Resolved agent_message routing: agent=%s -> user=%s channel=%s",
+                    "Resolved static_message routing: agent=%s -> user=%s channel=%s",
                     agent_id, external_user_id, channel_id or 'none',
                 )
 
@@ -401,12 +411,12 @@ class Scheduler:
                 try:
                     instance.send_message(external_user_id, message)
                     log.info(
-                        "Delivered agent_message directly: agent=%s user=%s "
+                        "Delivered static_message directly: agent=%s user=%s "
                         "session=%s", agent_id, external_user_id, session_id,
                     )
                 except Exception as e:
                     log.error(
-                        "Failed to send agent_message via channel %s: %s",
+                        "Failed to send static_message via channel %s: %s",
                         channel_id, e,
                     )
             return
@@ -415,9 +425,47 @@ class Scheduler:
         # The agent will process the message in a __scheduler__ session, but
         # the response may not reach the user if no channel is associated.
         log.warning(
-            "agent_message falling back to handle_message (no real user "
+            "static_message falling back to handle_message (no real user "
             "resolved): agent=%s external_user_id=%s channel_id=%s",
             agent_id, external_user_id, channel_id or 'none',
+        )
+        agent_runtime.handle_message(
+            agent_id=agent_id,
+            external_user_id=external_user_id,
+            message=message,
+            channel_id=channel_id,
+        )
+
+    def _action_session_prompt(self, config: dict):
+        """Send a prompt that triggers full LLM processing via handle_message().
+
+        Unlike static_message which delivers a pre-composed message directly,
+        this routes the prompt through the agent's real user session so the LLM
+        processes it with full tool access.  Useful for scheduled tasks that
+        need to run code, query data, or make decisions at execution time.
+        """
+        from backend.agent_runtime import agent_runtime
+        from models.db import db as main_db
+
+        agent_id = config['agent_id']
+        message = config['message']
+        channel_id = config.get('channel_id')
+        external_user_id = config.get('external_user_id', '__scheduler__')
+
+        # Resolve the real human user session — same logic as static_message
+        if external_user_id == '__scheduler__':
+            human_session = main_db.get_latest_human_session(agent_id)
+            if human_session:
+                external_user_id = human_session['external_user_id']
+                channel_id = channel_id or human_session.get('channel_id')
+                log.info(
+                    "Resolved session_prompt routing: agent=%s -> user=%s channel=%s",
+                    agent_id, external_user_id, channel_id or 'none',
+                )
+
+        log.info(
+            "Dispatching session_prompt to handle_message: agent=%s user=%s",
+            agent_id, external_user_id,
         )
         agent_runtime.handle_message(
             agent_id=agent_id,
