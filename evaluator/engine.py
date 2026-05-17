@@ -1346,8 +1346,10 @@ class EvaluationEngine:
                     mock_value = mock_responses[func_name]
                     mock_type = (mock_response_types or {}).get(func_name, 'json')
 
-                    if mock_type in ('javascript', 'python') and isinstance(mock_value, str):
-                        # Execute Python mock
+                    if mock_type == 'javascript' and isinstance(mock_value, str):
+                        mock_result_data = self._execute_js_mock(mock_value, func_args)
+                        self._log(f'[MOCK] Executed JS mock for {func_name}')
+                    elif mock_type == 'python' and isinstance(mock_value, str):
                         mock_result_data = self._execute_python_mock(mock_value, func_args)
                         self._log(f'[MOCK] Executed Python mock for {func_name}')
                     else:
