@@ -25,6 +25,13 @@ _logger = logging.getLogger(__name__)
 # Prevents infinite correction loops when the model is fundamentally confused.
 MAX_CONSECUTIVE_CORRECTIONS = 2
 
+# System tools that are always available regardless of what the tool registry
+# reports. These should never be flagged as hallucinated by the quality monitor.
+_ALWAYS_AVAILABLE_TOOLS = frozenset({
+    "use_skill",
+    "unload_skill",
+})
+
 
 class QualityMonitor:
     """Tracks and enforces quality correction limits across turns."""
@@ -133,7 +140,7 @@ def check_hallucinated_tool(
         A correction message string, or None if the tool exists.
     """
     _mon = monitor or _monitor
-    if fn_name in available_tools:
+    if fn_name in available_tools or fn_name in _ALWAYS_AVAILABLE_TOOLS:
         return None
     if _mon.is_capped:
         _logger.warning(

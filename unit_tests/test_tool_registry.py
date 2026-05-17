@@ -495,8 +495,23 @@ class TestManagerToolCRUD:
 
 # ==================== JS Mock Execution Tests ====================
 
+# Node.js is required for JS mock execution; skip if not available.
+_NODE_AVAILABLE = False
+try:
+    import subprocess
+    subprocess.run(["node", "--version"], capture_output=True, timeout=5, check=True)
+    _NODE_AVAILABLE = True
+except Exception:
+    pass
+
+
 class TestJsMockExecution:
     """Test JavaScript mock response execution"""
+
+    @pytest.fixture(autouse=True)
+    def _require_node(self):
+        if not _NODE_AVAILABLE:
+            pytest.skip("Node.js not available")
 
     @pytest.fixture
     def engine_instance(self):
