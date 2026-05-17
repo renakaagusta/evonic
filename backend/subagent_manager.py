@@ -146,6 +146,11 @@ class SubAgentManager:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
             except Exception as e:
                 _logger.warning("Failed to clean up temp dir for sub-agent %s: %s", sub_agent_id, e)
+            # Clean up legacy agents/ dir (created by old bug before /tmp routing)
+            from models.chatlog import _AGENTS_DIR
+            legacy_dir = os.path.join(_AGENTS_DIR, sub_agent_id)
+            if os.path.isdir(legacy_dir):
+                shutil.rmtree(legacy_dir, ignore_errors=True)
             _logger.info("Sub-agent destroyed: %s (parent=%s)", sub_agent_id, sub.parent_id)
             return True
 
@@ -201,14 +206,9 @@ class SubAgentManager:
                 sid for sid, sub in self._subagents.items()
                 if sub.parent_id == parent_id
             ]
-            for sid in to_remove:
-                del self._subagents[sid]
 
-        if to_remove:
-            _logger.info(
-                "Destroyed %d sub-agents for parent %s: %s",
-                len(to_remove), parent_id, ', '.join(to_remove),
-            )
+        for sid in to_remove:
+            self.destroy(sid)
 
         return len(to_remove)
 

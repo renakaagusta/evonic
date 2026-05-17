@@ -74,7 +74,13 @@ class ChatLog:
     def __init__(self, agent_id: str, session_id: str):
         self.agent_id = agent_id
         self.session_id = session_id
-        sessions_dir = os.path.join(_AGENTS_DIR, agent_id, 'sessions')
+        from backend.subagent_manager import subagent_manager
+        if subagent_manager.is_subagent(agent_id):
+            from models.chat import SUB_AGENTS_TMP_DIR
+            base_dir = os.path.join(SUB_AGENTS_TMP_DIR, agent_id)
+        else:
+            base_dir = os.path.join(_AGENTS_DIR, agent_id)
+        sessions_dir = os.path.join(base_dir, 'sessions')
         os.makedirs(sessions_dir, exist_ok=True)
         # session_id is "{agent_id}-{hash}" — strip the prefix for the filename
         filename = session_id
@@ -643,7 +649,13 @@ class ChatLogManager:
 
     def list_sessions(self, agent_id: str) -> List[str]:
         """Return session IDs (hash-only, without agent_id prefix) of all session log files for an agent."""
-        sessions_dir = os.path.join(_AGENTS_DIR, agent_id, 'sessions')
+        from backend.subagent_manager import subagent_manager
+        if subagent_manager.is_subagent(agent_id):
+            from models.chat import SUB_AGENTS_TMP_DIR
+            base_dir = os.path.join(SUB_AGENTS_TMP_DIR, agent_id)
+        else:
+            base_dir = os.path.join(_AGENTS_DIR, agent_id)
+        sessions_dir = os.path.join(base_dir, 'sessions')
         try:
             return [f[:-6] for f in os.listdir(sessions_dir) if f.endswith('.jsonl')]
         except FileNotFoundError:
