@@ -2,7 +2,9 @@
 WorkplaceManager — manages execution backends for Workplace objects.
 
 Multiple agent sessions can share the same Workplace (same workplace_id).
-WorkplaceManager ensures one backend instance per workplace_id, shared across sessions.
+For local workplaces, separate backends are maintained for sandboxed
+vs. non-sandboxed execution. For cloud and remote workplaces,
+one backend instance per workplace_id is shared across sessions.
 
 Cloud workplaces are 1:1 with an agent; their backend is created when Evonet connects.
 Local and Remote workplaces' backends are created on first access and cached.
@@ -21,7 +23,7 @@ _logger = logging.getLogger(__name__)
 class WorkplaceManager:
 
     def __init__(self):
-        self._backends: dict[str, ExecutionBackend] = {}   # workplace_id → backend
+        self._backends: dict[tuple[str, bool], ExecutionBackend] = {}   # (workplace_id, sandbox_enabled) → backend
         self._lock = threading.Lock()
 
     # -------------------------------------------------------------------------
@@ -30,9 +32,10 @@ class WorkplaceManager:
 
     def get_backend(self, workplace_id: str, sandbox_enabled: bool = False) -> ExecutionBackend:
         """Return (or create) the backend for a workplace. Raises RuntimeError if not ready."""
+        key = (workplace_id, sandbox_enabled)
         with self._lock:
-            if workplace_id in self._backends:
-                return self._backends[workplace_id]
+            if key in self._backends:
+                return self._backends[key]
 
         workplace = self._load_workplace(workplace_id)
         if not workplace:
@@ -44,7 +47,7 @@ class WorkplaceManager:
         if workplace_type == 'local':
             backend = self._create_local(config, sandbox_enabled=sandbox_enabled)
             with self._lock:
-                self._backends[workplace_id] = backend
+                self._backends[key] = backend
             self._set_status(workplace_id, 'connected')
             return backend
 
@@ -52,8 +55,9 @@ class WorkplaceManager:
             return self._connect_remote(workplace_id, config)
 
         if workplace_type == 'cloud':
+            cloud_key = (workplace_id, False)
             with self._lock:
-                backend = self._backends.get(workplace_id)
+                backend = self._backends.get(cloud_key)
             if backend is None:
                 raise RuntimeError(
                     f"Cloud Workplace '{workplace_id}' is not connected. "
@@ -72,9 +76,10 @@ class WorkplaceManager:
         config = self._parse_config(workplace)
 
         if workplace_type == 'local':
+            local_key = (workplace_id, False)
             with self._lock:
-                if workplace_id not in self._backends:
-                    self._backends[workplace_id] = self._create_local(config)
+                if local_key not in self._backends:
+                    self._backends[local_key] = self._create_local(config)
             self._set_status(workplace_id, 'connected')
             return {'ok': True, 'status': 'connected'}
 
@@ -86,8 +91,9 @@ class WorkplaceManager:
                 return {'ok': False, 'error': str(e)}
 
         if workplace_type == 'cloud':
+            cloud_key = (workplace_id, False)
             with self._lock:
-                connected = workplace_id in self._backends
+                connected = cloud_key in self._backends
             status = 'connected' if connected else 'disconnected'
             return {'ok': True, 'status': status, 'note': 'Cloud workplaces connect when Evonet starts.'}
 
@@ -95,14 +101,20 @@ class WorkplaceManager:
 
     def disconnect(self, workplace_id: str) -> dict:
         """Disconnect and destroy the backend for a workplace."""
-        with self._lock:
-            backend = self._backends.pop(workplace_id, None)
-        if backend is None:
+        any_destroyed = False
+        for sandbox_flag in (False, True):
+            key = (workplace_id, sandbox_flag)
+            with self._lock:
+                backend = self._backends.pop(key, None)
+            if backend is not None:
+                any_destroyed = True
+                try:
+                    backend.destroy()
+                except Exception as e:
+                    _logger.warning("Error destroying backend for workplace %s (sandbox=%s): %s",
+                                    workplace_id, sandbox_flag, e)
+        if not any_destroyed:
             return {'ok': True, 'detail': 'No active backend.'}
-        try:
-            backend.destroy()
-        except Exception as e:
-            _logger.warning("Error destroying backend for workplace %s: %s", workplace_id, e)
         self._set_status(workplace_id, 'disconnected')
         return {'ok': True, 'status': 'disconnected'}
 
@@ -112,7 +124,7 @@ class WorkplaceManager:
         if not workplace:
             return {'status': 'not_found', 'workplace_id': workplace_id}
         with self._lock:
-            backend = self._backends.get(workplace_id)
+            backend = self._backends.get((workplace_id, True)) or self._backends.get((workplace_id, False))
         if backend is None:
             return {
                 'status': workplace.get('status', 'disconnected'),
@@ -151,8 +163,9 @@ class WorkplaceManager:
             return
         config = self._parse_config(workplace)
         from backend.workplaces.backends.cloud_workplace import CloudWorkplaceBackend
+        cloud_key = (workplace_id, False)
         with self._lock:
-            existing = self._backends.get(workplace_id)
+            existing = self._backends.get(cloud_key)
             if isinstance(existing, CloudWorkplaceBackend):
                 backend = existing
             else:
@@ -160,14 +173,15 @@ class WorkplaceManager:
                     workplace_id=workplace_id,
                     workspace=config.get('workspace_path'),
                 )
-                self._backends[workplace_id] = backend
+                self._backends[cloud_key] = backend
         backend.on_ws_connected(ws)
         self._set_status(workplace_id, 'connected')
         _logger.info("Cloud workplace %s connected via Evonet", workplace_id)
 
     def on_connector_disconnected(self, workplace_id: str) -> None:
+        cloud_key = (workplace_id, False)
         with self._lock:
-            backend = self._backends.get(workplace_id)
+            backend = self._backends.get(cloud_key)
         if backend is not None:
             from backend.workplaces.backends.cloud_workplace import CloudWorkplaceBackend
             if isinstance(backend, CloudWorkplaceBackend):
@@ -176,8 +190,9 @@ class WorkplaceManager:
         _logger.info("Cloud workplace %s disconnected", workplace_id)
 
     def on_connector_message(self, workplace_id: str, data: dict) -> None:
+        cloud_key = (workplace_id, False)
         with self._lock:
-            backend = self._backends.get(workplace_id)
+            backend = self._backends.get(cloud_key)
         if backend is not None:
             from backend.workplaces.backends.cloud_workplace import CloudWorkplaceBackend
             if isinstance(backend, CloudWorkplaceBackend):
@@ -230,7 +245,7 @@ class WorkplaceManager:
             from backend.workplaces.backends.remote_workplace import RemoteWorkplaceBackend
             backend = RemoteWorkplaceBackend(config=config, workplace_id=workplace_id)
             with self._lock:
-                self._backends[workplace_id] = backend
+                self._backends[(workplace_id, False)] = backend
             self._set_status(workplace_id, 'connected')
             return backend
         except Exception as e:
