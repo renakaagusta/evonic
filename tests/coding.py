@@ -120,6 +120,17 @@ class CodingTest(BaseTest):
                 "expected": expected
             }
 
+        # Try normalizing whitespace around commas (e.g. "A, B, C" vs "A,B,C")
+        norm_resp = re.sub(r'\s*,\s*', ',', response)
+        norm_exp = re.sub(r'\s*,\s*', ',', expected)
+        if norm_resp == norm_exp:
+            return {
+                "score": 0.95,
+                "details": f"Correct (comma-whitespace normalized): {response}",
+                "actual": response,
+                "expected": expected
+            }
+
         # Check if expected is contained in response (for multi-line output)
         if expected in response:
             return {
