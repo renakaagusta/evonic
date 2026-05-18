@@ -342,8 +342,8 @@ function dispatchSessionEvent(evtName, data, sessionId) {
         if (!_sseThinkingId) {
             _sseThinkingId = chatUI.showThinkingIndicator();
         }
-        chatUI.appendTimelineEntry(_sseThinkingId, {type: 'tool_result', tool: data.tool_name, result: data.result, error: data.error});
-        if (['save_plan', 'set_mode', 'update_tasks', 'state'].includes(data.tool_name)) {
+        chatUI.appendTimelineEntry(_sseThinkingId, {type: 'tool_result', tool: data.tool, result: data.result, error: data.error});
+        if (['save_plan', 'set_mode', 'update_tasks', 'state'].includes(data.tool)) {
             loadAgentState();
             loadSessionSummary();
         }
@@ -925,6 +925,16 @@ function connectSessionStream(sessionId, afterSeq = 0) {
         es.addEventListener(evtName, e => {
             if (currentSessionId !== sessionId) return;
             const data = JSON.parse(e.data);
+            // Normalize raw SSE field names to match gap-fill/replay format so
+            // dispatchSessionEvent receives consistent field names regardless of path.
+            if (evtName === 'tool_call_started') {
+                data.tool = data.tool_name || data.tool;
+                data.args = data.tool_args || data.args;
+            } else if (evtName === 'tool_executed') {
+                data.tool = data.tool_name || data.tool;
+                data.result = data.tool_result || data.result;
+                data.error = data.has_error || data.error;
+            }
             handleSeq(evtName, data, d => dispatchSessionEvent(evtName, d, sessionId));
         });
     }
