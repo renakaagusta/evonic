@@ -14,6 +14,7 @@ _logger = logging.getLogger(__name__)
 from models.db import db
 from backend.tools import tool_registry
 from backend.skills_manager import SkillsManager
+from backend.agent_runtime import skill_injector
 from config import AGENT_MAX_TOOL_RESULT_CHARS as MAX_TOOL_RESULT_CHARS
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -318,12 +319,17 @@ def _cache_key_valid(agent: Dict[str, Any], cache_entry: Dict[str, Any]) -> bool
     return True
 
 
-def build_system_prompt(agent: Dict[str, Any]) -> str:
+def build_system_prompt(agent: Dict[str, Any],
+                        session_id: str = None,
+                        user_prompt: str = None) -> str:
     """Build the system prompt including tool injections and KB file listing.
 
     The static portion (SYSTEM.md, KB files, skills) is cached per-agent and
     invalidated only when underlying files/dirs change (mtime check).
     Dynamic portions (onboarding, datetime) are always re-evaluated.
+
+    When session_id and user_prompt are provided, skill-inject guidance
+    (per-turn tool usage instructions) is appended.
     """
     aid = agent['id']
     eid = _effective_id(agent)
@@ -435,10 +441,22 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
             "using `write_file` or bash/runpy for binary files (PDFs, images)."
         )
 
+    # ── Intent-based skill injection ──
+    # Inject per-turn tool usage guidance when session context is available.
+    if session_id and user_prompt:
+        try:
+            guidance = skill_injector.get_guidance(session_id, user_prompt)
+            if guidance:
+                prompt += guidance
+        except Exception:
+            _logger.debug("Skill injection skipped for session %s", session_id, exc_info=True)
+
     return prompt
 
 
-def build_tools(agent: Dict[str, Any]) -> List[Dict[str, Any]]:
+def build_tools(agent: Dict[str, Any],
+                session_id: str = None,
+                user_prompt: str = None) -> List[Dict[str, Any]]:
     """Build the OpenAI function tool list for this agent."""
     tools = []
 
@@ -497,6 +515,14 @@ def build_tools(agent: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "type": "function",
                     "function": tool_def['function']
                 })
+
+    # ── Tool schema filtering ──
+    # Filter tool schemas when session context is available.
+    if session_id and user_prompt:
+        try:
+            tools = skill_injector.get_filtered_tools(session_id, user_prompt, tools)
+        except Exception:
+            _logger.debug("Tool filtering skipped for session %s", session_id, exc_info=True)
 
     return tools
 

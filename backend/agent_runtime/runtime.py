@@ -1250,8 +1250,17 @@ class AgentRuntime:
             _used_prefetch = True
             _logger.debug("Turn prefetch HIT for session %s — skipping context build", ctx.session_id)
         else:
-            system_prompt = _ctx.build_system_prompt(agent)
-            tools = _ctx.build_tools(agent)
+            # Get current user prompt for intent-based skill injection
+            _user_prompt = None
+            try:
+                _chatlog = chatlog_manager.get(db_agent_id, ctx.session_id)
+                _last_user = _chatlog.get_last_entry(types=frozenset({'user'}))
+                if _last_user:
+                    _user_prompt = _last_user.get('content', '') or None
+            except Exception:
+                pass
+            system_prompt = _ctx.build_system_prompt(agent, session_id=ctx.session_id, user_prompt=_user_prompt)
+            tools = _ctx.build_tools(agent, session_id=ctx.session_id, user_prompt=_user_prompt)
             _used_prefetch = False
             messages = [{"role": "system", "content": system_prompt}]
 
@@ -1423,7 +1432,7 @@ class AgentRuntime:
             assigned_tool_ids = _agent_ctx_prebuilt.get('assigned_tool_ids', [])
             agent_context = dict(_agent_ctx_prebuilt)  # shallow copy to allow mutations
         else:
-            tools = _ctx.build_tools(agent)
+            tools = _ctx.build_tools(agent, session_id=ctx.session_id, user_prompt=_user_prompt)
 
             # Build agent context for tool backends
             assigned_tool_ids = db.get_agent_tools(db_agent_id)
