@@ -14,6 +14,7 @@ Usage:
 
     result = safety_pipeline.check(code, tool_type='bash', agent_context=ctx)
 """
+from __future__ import annotations
 
 import logging
 from typing import Any

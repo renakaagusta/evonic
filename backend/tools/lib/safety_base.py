@@ -4,6 +4,7 @@ safety_base — Abstract base class and shared types for safety checkers.
 All safety checkers (built-in heuristic, custom regex rules, user code checkers)
 implement SafetyCheckerBase so the SafetyPipeline can orchestrate them uniformly.
 """
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any, TypedDict
