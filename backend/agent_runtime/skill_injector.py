@@ -117,6 +117,11 @@ INTENT_MAP: Dict[str, List[str]] = {
     "lookup": ["read_file", "read"],
 
     # Fetching / API calls
+    "fetch": ["api_call"],
+    "api": ["api_call"],
+    "http": ["api_call"],
+    "request": ["api_call"],
+    "download": ["bash", "api_call"],
     "curl": ["bash"],
     "wget": ["bash"],
 
@@ -488,6 +493,9 @@ TOOL_GUIDANCE: Dict[str, str] = {
     ),
     "kanban_get_comments": (
         "**kanban_get_comments** — Retrieve paginated comments from a Kanban task. Newest first."
+    ),
+    "api_call": (
+        "**api_call** — Make HTTP API requests. Use for REST endpoints, JSON data fetching."
     ),
     "browser_navigate": (
         "**browser_navigate** — Navigate a browser to a URL. Use for web scraping and automation."
