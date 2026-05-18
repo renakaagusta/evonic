@@ -51,6 +51,9 @@ log = logging.getLogger('supervisor')
 # Constants
 # ---------------------------------------------------------------------------
 
+# GitHub repo identifier for release API queries
+GITHUB_REPO = "anvie/evonic"
+
 SHARED_ITEMS = [
     ('db',      True),   # (name, is_directory)
     ('agents',  True),
@@ -451,6 +454,39 @@ def get_latest_tag(app_root: str) -> Optional[str]:
     if rc != 0 or not out:
         return None
     return out.splitlines()[0].strip()
+
+
+def get_latest_release(app_root: str) -> Optional[str]:
+    """Return the tag name of the latest published GitHub release, or None.
+
+    Queries the GitHub Releases API so only published releases are
+    considered — dangling local tags, pre-release tags, or tags that
+    aren't published on GitHub are ignored.
+
+    Returns None on any network / API error — no fallback to local tags.
+    """
+    import urllib.request
+    import json as _json
+
+    url = f'https://api.github.com/repos/{GITHUB_REPO}/releases/latest'
+    req = urllib.request.Request(url, method='GET')
+    req.add_header('Accept', 'application/vnd.github.v3+json')
+    req.add_header('User-Agent', 'evonic-update-checker/1.0')
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read().decode())
+            tag = data.get('tag_name')
+            if tag:
+                log.info('Latest release from GitHub API: %s', tag)
+                return tag
+            log.warning('GitHub release response missing tag_name: %s', data)
+    except urllib.error.HTTPError as e:
+        log.warning('GitHub API HTTP %d: %s — skipping update check', e.code, e.reason)
+    except (urllib.error.URLError, OSError, _json.JSONDecodeError) as e:
+        log.warning('GitHub API request failed: %s — skipping update check', e)
+
+    return None
 
 
 def get_tag_sha(app_root: str, tag: str) -> Optional[str]:

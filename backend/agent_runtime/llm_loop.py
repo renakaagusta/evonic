@@ -36,6 +36,18 @@ from backend.agent_runtime.llm_response_parser import (
     CONTINUATION_NUDGE, MAX_CONTINUATION_NUDGES,
 )
 from backend.agent_runtime.llm_tool_executor import MAX_INJECTIONS_PER_LOOP
+from backend.agent_runtime.quality_monitor import (
+    QualityMonitor,
+    check_empty_response as _qm_check_empty,
+    check_hallucinated_tool as _qm_check_hallucinated,
+    check_loop_detection as _qm_check_loop,
+    MAX_CONSECUTIVE_CORRECTIONS as MAX_QM_CORRECTIONS,
+)
+from backend.agent_runtime.output_parser import (
+    has_malformed_calls,
+    detect_all as detect_malformed_tool_calls,
+    build_nudge_message as build_output_parser_nudge,
+)
 
 from models.db import db
 from backend.llm_client import llm_client, strip_thinking_tags, LLMClient, _split_trailing_think_close
@@ -72,7 +84,8 @@ def _persist_agent_state_split(ms, agent_id, session_id, db_agent_id=None):
 from backend.tools import tool_registry
 from config import (AGENT_MAX_TOOL_ITERATIONS as MAX_TOOL_ITERATIONS,
                     AGENT_MAX_TOOL_RESULT_CHARS as MAX_TOOL_RESULT_CHARS,
-                    AGENT_TIMEOUT_RETRIES as MAX_TIMEOUT_RETRIES)
+                    AGENT_TIMEOUT_RETRIES as MAX_TIMEOUT_RETRIES,
+                    THINKING_BUDGET as DEFAULT_THINKING_BUDGET)
 
 
 def run_tool_loop(agent: Dict[str, Any],
@@ -147,6 +160,13 @@ def run_tool_loop(agent: Dict[str, Any],
     _continuation_nudge_count: int = 0
     # Message-injection scanner: hashes of already-scanned user messages (Layer A)
     _scanned_message_hashes: set = set()
+    # Thinking budget cap state (Phase 2: small model efficiency)
+    _thinking_token_count: int = 0       # running tally of thinking tokens this turn
+    _thinking_budget_aborted: bool = False  # set True after first budget abort — prevents re-triggering
+    # Quality monitor — tracks and caps auto-correction messages (Phase 2)
+    _quality_monitor = QualityMonitor()
+    # Set of available tool function names for hallucinated-tool detection
+    _available_tool_names: set = set()
 
     # Restore persisted skill state for this session (survives across turns until unload or clear)
     _skill_system_mds: dict = dict(session_skill_mds.get(session_id, {}))
@@ -162,6 +182,14 @@ def run_tool_loop(agent: Dict[str, Any],
             if fn and fn not in _existing_fns:
                 tools.append(td)
                 _existing_fns.add(fn)
+
+    # Build available tool names set for hallucinated-tool detection
+    _available_tool_names = {
+        t.get('function', {}).get('name', '')
+        for t in tools
+    }
+    _available_tool_names.discard('')  # remove empty strings if any
+    _logger.debug("Available tools: %d names", len(_available_tool_names))
 
     # Add restored skill tool IDs to assigned_tool_ids for authorization guard
     _assigned = agent_context.get('assigned_tool_ids')
@@ -251,6 +279,19 @@ def run_tool_loop(agent: Dict[str, Any],
 
     # Create LLMClient with resolved model config
     llm = LLMClient(model_config=agent_model_config) if agent_model_config else llm_client
+
+    # Resolve thinking budget: per-model config takes precedence over global default.
+    # Only active when the model actually supports thinking (thinking=True).
+    _model_thinking = bool((agent_model_config or {}).get('thinking', False))
+    _model_think_budget = int((agent_model_config or {}).get('thinking_budget', 0) or 0)
+    if _model_thinking and _model_think_budget > 0:
+        _thinking_budget = _model_think_budget
+    elif _model_thinking:
+        _thinking_budget = DEFAULT_THINKING_BUDGET
+    else:
+        _thinking_budget = 0  # no-op for non-thinking models
+    _logger.debug("Thinking budget: %d tokens (model_thinking=%s, model_budget=%d)",
+                  _thinking_budget, _model_thinking, _model_think_budget)
 
     # Step 4: If using fallback from agent_state, inject system message
     if _active_fallback_model_name:
@@ -453,7 +494,10 @@ def run_tool_loop(agent: Dict[str, Any],
         # Disable thinking after the first tool-call iteration so the API doesn't
         # see "thinking enabled" while tool_calls + reasoning_content are already
         # in the history (causes DeepSeek-R1 "reasoning_content must be passed back").
-        _enable_thinking_this_call = not _had_tool_call_iteration
+        # Also disable thinking when the budget was exceeded this turn (Phase 2).
+        _enable_thinking_this_call = (
+            not _had_tool_call_iteration and not _thinking_budget_aborted
+        )
         _logger.info("[LOCK] _llm_lock - WAITING (session=%s, main LLM call)", session_id)
         with llm_lock:
             _logger.info("[LOCK] _llm_lock - ACQUIRED (session=%s, main LLM call)", session_id)
@@ -760,6 +804,46 @@ def run_tool_loop(agent: Dict[str, Any],
         else:
             content = ''
 
+        # ── Thinking Budget Cap (Phase 2) ──────────────────────────────────
+        # Track thinking tokens per turn. If the model spends too much of its
+        # context window deliberating instead of acting, abort the current
+        # response and retry with thinking disabled to force commitment.
+        if _thinking_budget > 0 and not _thinking_budget_aborted:
+            _thinking_text = reasoning_text or thinking or ''
+            _new_tokens = len(_thinking_text) // 4  # rough estimate: ~4 chars/token
+            _thinking_token_count += _new_tokens
+            if _thinking_token_count > _thinking_budget:
+                _thinking_budget_aborted = True
+                _budget_msg = (
+                    f"Thinking budget exceeded ({_thinking_token_count} > {_thinking_budget} tokens). "
+                    "Aborting turn — retrying with thinking disabled."
+                )
+                _logger.warning("THINKING_BUDGET_EXCEEDED agent=%s session=%s tokens=%d/%d",
+                                agent_id, session_id, _thinking_token_count, _thinking_budget)
+                event_stream.emit('thinking_budget_exceeded', {
+                    'agent_id': agent_id, 'session_id': session_id,
+                    'external_user_id': external_user_id, 'channel_id': channel_id,
+                    'tokens_used': _thinking_token_count, 'budget': _thinking_budget,
+                })
+                # Save the current (aborted) response as intermediate context so
+                # the model sees its own output on the retry.
+                _thinking_budget_nudge = (
+                    "[thinking budget exceeded] Please commit to an implementation "
+                    "now. Stop deliberating and use your tools to make progress."
+                )
+                if reasoning_text:
+                    _asst_abort_msg: Dict[str, Any] = {
+                        "role": "assistant", "content": content or ''
+                    }
+                    _asst_abort_msg["reasoning_content"] = reasoning_text
+                    messages.append(_asst_abort_msg)
+                elif content:
+                    messages.append({"role": "assistant", "content": content})
+                messages.append({"role": "user", "content": _thinking_budget_nudge})
+                # Yield to ensure clean state transition (setImmediate-style).
+                time.sleep(0)
+                continue
+
         # Fallback: recover tool calls from thinking/CoT content.
         # Covers the case where the model emits <tool_call> XML inside <think> tags
         # or in the separate reasoning_content field (llama.cpp --reasoning mode)
@@ -772,6 +856,23 @@ def run_tool_loop(agent: Dict[str, Any],
                 if cot_calls:
                     tool_calls = qwen_tool_calls_to_openai_format(cot_calls)
                     _logger.debug("Recovered %d tool call(s) from thinking/CoT content", len(tool_calls))
+
+        # --- Output Parser: detect malformed tool calls embedded in text ---
+        # If the model produced no native tool_calls but its text contains
+        # tool-call-like patterns (fenced ```tool blocks, <tool_call> tags,
+        # or bare JSON with name+arguments), nudge it to use native calling.
+        if not tool_calls and raw_content and has_malformed_calls(raw_content):
+            _logger.warning("Malformed tool calls detected in text — injecting nudge")
+            _extracted = detect_malformed_tool_calls(raw_content)
+            _nudge = build_output_parser_nudge(_extracted)
+            messages.append({"role": "assistant", "content": raw_content})
+            messages.append({"role": "user", "content": _nudge})
+            event_stream.emit('output_parser_nudge', {
+                'agent_id': agent_id, 'session_id': session_id,
+                'external_user_id': external_user_id, 'channel_id': channel_id,
+                'extracted_count': len(_extracted),
+            })
+            continue
 
         if content:
             is_final = not bool(tool_calls)
@@ -976,6 +1077,18 @@ def run_tool_loop(agent: Dict[str, Any],
 
         for tc_idx, tc in enumerate(tool_calls):
             fn_name = tc['function']['name']
+
+            # --- Quality Monitor: hallucinated tool check ---
+            _qm_hallucinated = _qm_check_hallucinated(
+                fn_name, _available_tool_names, _quality_monitor)
+            if _qm_hallucinated:
+                _logger.warning("Hallucinated tool '%s' — injecting correction", fn_name)
+                _parse_failed[tc_idx] = json.dumps({
+                    'error': _qm_hallucinated,
+                })
+                _tool_records.append((tc, fn_name, None, {}))
+                continue
+
             raw_args_str = tc['function'].get('arguments', '')
             try:
                 args = json.loads(raw_args_str)
@@ -1408,9 +1521,17 @@ def run_tool_loop(agent: Dict[str, Any],
             if _tool_call_window.count(_tool_call_key) >= 5 and not _tool_args_force_stop_injected:
                 _logger.warning("Loop detected (%d/10 calls in window: %s) — injecting force-stop",
                                _tool_call_window.count(_tool_call_key), fn_name)
+                _qm_loop_msg = _qm_check_loop(
+                    _tool_call_window, fn_name, args,
+                    monitor=_quality_monitor)
                 messages.append({
                     "role": "user",
-                    "content": f"[SYSTEM] URGENT: You have called the tool '{fn_name}' with the same arguments {_tool_call_window.count(_tool_call_key)} times in the last {len(_tool_call_window)} tool calls. STOP and revert to the state where you started. Review your previous results and provide your FINAL answer."
+                    "content": _qm_loop_msg or (
+                        f"[SYSTEM] URGENT: You have called the tool '{fn_name}' with the same "
+                        f"arguments {_tool_call_window.count(_tool_call_key)} times in the last "
+                        f"{len(_tool_call_window)} tool calls. STOP and revert to the state where "
+                        f"you started. Review your previous results and provide your FINAL answer."
+                    ),
                 })
                 _tool_args_force_stop_injected = True
                 _any_force_stop_injected = True
@@ -1422,6 +1543,8 @@ def run_tool_loop(agent: Dict[str, Any],
 
         # Tool calls executed successfully — reset continuation nudge counter
         _continuation_nudge_count = 0
+        # Reset quality monitor correction counter on successful tool-execution turn
+        _quality_monitor.reset()
 
         # Check B: stop signal check after tool execution, before next LLM call
         if stop_event.is_set():

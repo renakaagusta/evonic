@@ -37,13 +37,31 @@ def write_file(
     abs_path = os.path.abspath(file_path)
     already_exists = os.path.exists(abs_path)
 
-    # Overwrite guard
-    if already_exists and not overwrite:
+    # Write-vs-Edit guard: Write tool is for NEW files only.
+    # Existing files MUST be modified via str_replace (surgical edits),
+    # never by overwriting the entire file. This invariant forces the
+    # model to make precise, targeted changes instead of lazy wholesale
+    # rewrites — the single highest-impact mechanism from little-coder.
+    if already_exists:
         return {
             'error': (
                 f"File already exists: {file_path}. "
-                "Set overwrite=true to replace it."
-            )
+                "The write_file tool is for creating NEW files only — "
+                "it does NOT overwrite existing files. "
+                "To modify an existing file, use str_replace instead.\n"
+                "1. First, call read_file() to see the current content.\n"
+                "2. Then call str_replace with old_str set to the exact "
+                "lines you want to change (copy them from read_file's output).\n"
+                "3. Set new_str to your replacement text.\n"
+                "Retrying write_file will be refused again."
+            ),
+            'isError': True,
+            'edit_recipe': {
+                'tool': 'str_replace',
+                'file_path': file_path,
+                'old_str': '<READ the file first with read_file, then paste the exact text to replace here>',
+                'new_str': '<your replacement text here>',
+            },
         }
 
     # Create parent directories
@@ -172,12 +190,26 @@ def execute(agent, args: dict) -> dict:
         if backend is None:
             return {'error': real_path}  # error message
         already_exists = backend.file_exists(real_path)
-        if not overwrite and already_exists:
+        if already_exists:
             return {
                 'error': (
                     f"File already exists: {file_path}. "
-                    "Set overwrite=true to replace it."
-                )
+                    "The write_file tool is for creating NEW files only — "
+                    "it does NOT overwrite existing files. "
+                    "To modify an existing file, use str_replace instead.\n"
+                    "1. First, call read_file() to see the current content.\n"
+                    "2. Then call str_replace with old_str set to the exact "
+                    "lines you want to change (copy them from read_file's output).\n"
+                    "3. Set new_str to your replacement text.\n"
+                    "Retrying write_file will be refused again."
+                ),
+                'isError': True,
+                'edit_recipe': {
+                    'tool': 'str_replace',
+                    'file_path': file_path,
+                    'old_str': '<READ the file first with read_file, then paste the exact text to replace here>',
+                    'new_str': '<your replacement text here>',
+                },
             }
         parent = real_path.rsplit("/", 1)[0] if "/" in real_path else ""
         if parent and create_dirs and not backend.file_exists(parent):
@@ -210,13 +242,27 @@ def execute(agent, args: dict) -> dict:
         target_path = backend.resolve_path(target_path)
         already_exists = backend.file_exists(target_path)
 
-        # Overwrite guard
-        if not overwrite and already_exists:
+        # Write-vs-Edit guard: Write tool is for NEW files only.
+        if already_exists:
             return {
                 'error': (
                     f"File already exists: {file_path}. "
-                    "Set overwrite=true to replace it."
-                )
+                    "The write_file tool is for creating NEW files only — "
+                    "it does NOT overwrite existing files. "
+                    "To modify an existing file, use str_replace instead.\n"
+                    "1. First, call read_file() to see the current content.\n"
+                    "2. Then call str_replace with old_str set to the exact "
+                    "lines you want to change (copy them from read_file's output).\n"
+                    "3. Set new_str to your replacement text.\n"
+                    "Retrying write_file will be refused again."
+                ),
+                'isError': True,
+                'edit_recipe': {
+                    'tool': 'str_replace',
+                    'file_path': file_path,
+                    'old_str': '<READ the file first with read_file, then paste the exact text to replace here>',
+                    'new_str': '<your replacement text here>',
+                },
             }
 
         # Create parent directories if needed
@@ -266,22 +312,26 @@ def test_execute():
     passed += 1
 
     # ------------------------------------------------------------------
-    print('Test 2: Overwrite an existing file')
+    print('Test 2: Write-vs-Edit guard refuses existing file (overwrite default)')
     r = write_file(p, 'new content\n')
-    assert r['result'] == 'success', r
-    assert r['created'] is False, r
-    assert open(p).read() == 'new content\n'
+    assert 'error' in r, r
+    assert r.get('isError') is True, r
+    assert 'edit_recipe' in r, r
+    assert r['edit_recipe']['tool'] == 'str_replace', r
+    assert open(p).read() == 'hello world\n'  # unchanged
     passed += 1
 
     # ------------------------------------------------------------------
-    print('Test 3: overwrite=False blocks existing file')
+    print('Test 3: Write-vs-Edit guard refuses existing file (overwrite=False)')
     r = write_file(p, 'blocked', overwrite=False)
     assert 'error' in r, r
-    assert open(p).read() == 'new content\n'  # unchanged
+    assert r.get('isError') is True, r
+    assert 'edit_recipe' in r, r
+    assert open(p).read() == 'hello world\n'  # unchanged
     passed += 1
 
     # ------------------------------------------------------------------
-    print('Test 4: overwrite=False allows creating a new file')
+    print('Test 4: Write creates a new file')
     p2 = path('brand_new.txt')
     r = write_file(p2, 'fresh', overwrite=False)
     assert r['result'] == 'success', r

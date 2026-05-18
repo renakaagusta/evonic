@@ -457,6 +457,22 @@ def build_tools(agent: Dict[str, Any]) -> List[Dict[str, Any]]:
         from backend.tools.super_agent_tools import get_super_agent_tool_defs
         tools.extend(get_super_agent_tool_defs())
 
+    # Super agent gets ALL skill tools automatically — no per-skill assignment needed
+    if agent.get('is_super'):
+        seen_fn_names = {t['function']['name'] for t in tools if t.get('function', {}).get('name')}
+        for tool_def in tool_registry.get_all_tool_defs():
+            tool_id = tool_def.get('id', '')
+            fn_name = tool_def.get('function', {}).get('name', '')
+            if not tool_id.startswith('skill:') or not fn_name:
+                continue
+            if fn_name in seen_fn_names:
+                continue
+            seen_fn_names.add(fn_name)
+            tools.append({
+                "type": "function",
+                "function": tool_def['function']
+            })
+
     # Agent messaging tools — available to super agent and agents with messaging enabled
     if agent.get('is_super') or agent.get('agent_messaging_enabled') != 0:
         from backend.tools.agent_messaging import get_agent_messaging_tool_defs
@@ -467,7 +483,7 @@ def build_tools(agent: Dict[str, Any]) -> List[Dict[str, Any]]:
     eid = _effective_id(agent)
     assigned_ids = set(db.get_agent_tools(eid))
     if assigned_ids:
-        seen_fn_names = set()
+        seen_fn_names = {t['function']['name'] for t in tools if t.get('function', {}).get('name')}
         for tool_def in tool_registry.get_all_tool_defs():
             tool_id = tool_def.get('id', '')
             fn_name = tool_def.get('function', {}).get('name', '')

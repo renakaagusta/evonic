@@ -1428,6 +1428,20 @@ class AgentRuntime:
             # Build agent context for tool backends
             assigned_tool_ids = db.get_agent_tools(db_agent_id)
 
+            # Super agent gets all skill tool IDs automatically — authorization guard
+            # must allow execution of all skill tools without per-skill assignment.
+            if agent.get('is_super'):
+                from backend.skills_manager import skills_manager
+                _all_skill_ids = set()
+                for _sd in skills_manager.get_all_skill_tool_defs():
+                    _tid = _sd.get('id', '')
+                    if _tid:
+                        _all_skill_ids.add(_tid)
+                _existing = set(assigned_tool_ids)
+                for _tid in _all_skill_ids:
+                    if _tid not in _existing:
+                        assigned_tool_ids.append(_tid)
+
             # Resolve workspace: workplace config takes priority over agent.workspace.
             # For cloud workplaces, never fall back to the agent's /workspace path —
             # Evonet runs on the remote device and has its own working directory.
