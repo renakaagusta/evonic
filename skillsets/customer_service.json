@@ -10,7 +10,6 @@
     "create_booking",
     "send_notification",
     "get_current_date",
-    "api_call",
     "read_file",
     "calculator"
   ],
