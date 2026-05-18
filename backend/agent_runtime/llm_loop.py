@@ -355,10 +355,7 @@ def run_tool_loop(agent: Dict[str, Any],
 
     _iteration = 0
     _injection_count = 0  # total injections in this loop run (capped to prevent infinite loops)
-    # Track whether we've already done a thinking-enabled LLM call with tool calls.
-    # Some APIs (e.g. DeepSeek-R1) require that thinking is ONLY enabled on the
-    # first call; subsequent calls (after tool results) must NOT re-enable thinking,
-    # otherwise the API rejects with "reasoning_content must be passed back".
+    # Track whether we've already done a tool-call iteration (kept for future use).
     _had_tool_call_iteration = False
 
     def _get_last_user_message(msgs: list) -> Optional[dict]:
@@ -491,13 +488,13 @@ def run_tool_loop(agent: Dict[str, Any],
                             )
 
         # LOCK ORDERING: Main path — llm_lock only. No other locks held here.
-        # Disable thinking after the first tool-call iteration so the API doesn't
-        # see "thinking enabled" while tool_calls + reasoning_content are already
-        # in the history (causes DeepSeek-R1 "reasoning_content must be passed back").
-        # Also disable thinking when the budget was exceeded this turn (Phase 2).
-        _enable_thinking_this_call = (
-            not _had_tool_call_iteration and not _thinking_budget_aborted
-        )
+        # Always keep thinking enabled if the model supports it. Previously this
+        # was disabled after the first tool-call iteration to work around a
+        # DeepSeek-R1 bug, but newer DeepSeek models (v4+) reject requests that
+        # contain reasoning_content in messages without the thinking parameter.
+        # Since reasoning_content is now persisted to DB and passed back correctly,
+        # keeping thinking enabled works for both old and new models.
+        _enable_thinking_this_call = True
         _logger.info("[LOCK] _llm_lock - WAITING (session=%s, main LLM call)", session_id)
         with llm_lock:
             _logger.info("[LOCK] _llm_lock - ACQUIRED (session=%s, main LLM call)", session_id)
@@ -921,7 +918,8 @@ def run_tool_loop(agent: Dict[str, Any],
                 _continuation_nudge_count += 1
                 _logger.debug("Continuation phrase detected — nudging LLM (%d/%d)",
                               _continuation_nudge_count, MAX_CONTINUATION_NUDGES)
-                db.add_chat_message(session_id, 'assistant', content, agent_id=db_agent_id)
+                _nudge_meta = {"reasoning_content": reasoning_text} if reasoning_text else None
+                db.add_chat_message(session_id, 'assistant', content, agent_id=db_agent_id, metadata=_nudge_meta)
                 chatlog.append({'type': 'intermediate', 'session_id': session_id, 'content': content})
                 _asst_nudge_msg: Dict[str, Any] = {"role": "assistant", "content": content}
                 if reasoning_text:
@@ -947,7 +945,8 @@ def run_tool_loop(agent: Dict[str, Any],
             if pre_final_injections:
                 # Save this response as an intermediate assistant message so the
                 # LLM sees it as context, then append the injected instructions.
-                db.add_chat_message(session_id, 'assistant', content, agent_id=db_agent_id)
+                _inj_meta = {"reasoning_content": reasoning_text} if reasoning_text else None
+                db.add_chat_message(session_id, 'assistant', content, agent_id=db_agent_id, metadata=_inj_meta)
                 chatlog.append({'type': 'intermediate', 'session_id': session_id, 'content': content})
                 _asst_inj_msg: Dict[str, Any] = {"role": "assistant", "content": content}
                 if reasoning_text:
@@ -963,6 +962,9 @@ def run_tool_loop(agent: Dict[str, Any],
                 meta['thinking_duration'] = round(time.time() - _loop_start_time, 1)
             if meta and agent.get('send_intermediate_responses'):
                 meta['send_intermediate_responses'] = True
+            if reasoning_text:
+                meta = meta or {}
+                meta['reasoning_content'] = reasoning_text
             _final_dur = round(time.time() - _loop_start_time, 1)
             if content:
                 db.add_chat_message(session_id, 'assistant', content, agent_id=db_agent_id, metadata=meta)
@@ -1003,6 +1005,8 @@ def run_tool_loop(agent: Dict[str, Any],
                     _logger.error("LLM still looping after force-stop injection — terminating loop")
                     _dup_dur = round(time.time() - _loop_start_time, 1)
                     meta = {"timeline": timeline, "thinking_duration": _dup_dur}
+                    if reasoning_text:
+                        meta['reasoning_content'] = reasoning_text
                     db.add_chat_message(session_id, 'assistant', content, agent_id=db_agent_id, metadata=meta)
                     chatlog.append({'type': 'error', 'session_id': session_id,
                                     'content': content or '(No response)',
@@ -1048,7 +1052,8 @@ def run_tool_loop(agent: Dict[str, Any],
             sanitized_tool_calls.append(_tc_copy)
 
         # Save the assistant message with tool calls
-        db.add_chat_message(session_id, 'assistant', content, tool_calls=tool_calls, agent_id=db_agent_id)
+        _tc_meta = {"reasoning_content": reasoning_text} if reasoning_text else None
+        db.add_chat_message(session_id, 'assistant', content, tool_calls=tool_calls, agent_id=db_agent_id, metadata=_tc_meta)
         # Write intermediate content + individual tool_call entries to chatlog
         if content:
             chatlog.append({'type': 'intermediate', 'session_id': session_id, 'content': content})

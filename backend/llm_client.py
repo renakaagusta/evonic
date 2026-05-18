@@ -383,23 +383,27 @@ class LLMClient:
             merged["content"] = combined_content
             processed_messages = [merged] + processed_messages[n_sys:]
 
-        # Handle reasoning_content field based on thinking mode:
-        # - Thinking ON (self.thinking=True, enable_thinking=True): add the field on every
-        #   assistant message — some APIs (e.g. DeepSeek) require it even when the model
-        #   returned no reasoning for that particular turn.
-        # - Thinking model but disabled for this call (self.thinking=True, enable_thinking=False):
-        #   keep existing reasoning_content so it is passed back correctly (required by
-        #   DeepSeek-R1 after tool calls), but do NOT add empty strings to messages that
-        #   have none — and do NOT add the thinking parameter to the payload below.
-        # - Thinking OFF (self.thinking=False): other APIs reject the field entirely — strip it.
-        if self.thinking and enable_thinking:
+        # Handle reasoning_content field based on thinking mode.
+        # Some models (e.g. DeepSeek-v4) produce reasoning_content automatically
+        # even without explicit thinking mode. Detect this by checking if any
+        # assistant message already carries reasoning_content — if so, preserve
+        # it so the API receives it back on the next call.
+        _has_reasoning = any(
+            _msg.get("reasoning_content")
+            for _msg in processed_messages
+            if _msg.get("role") == "assistant"
+        )
+        if self.thinking or _has_reasoning:
+            # Ensure every assistant message has the field (some APIs require it
+            # even on turns where the model produced no reasoning).
             for _msg in processed_messages:
                 if _msg.get("role") == "assistant" and "reasoning_content" not in _msg:
                     _msg["reasoning_content"] = ""
-        elif not self.thinking:
+        else:
+            # No thinking configured and no reasoning in history — strip the
+            # field so APIs that reject unknown fields are not affected.
             for _msg in processed_messages:
                 _msg.pop("reasoning_content", None)
-        # else: self.thinking=True, enable_thinking=False → leave reasoning_content as-is
 
         # Claude API uses {"type":"image","source":{...}} instead of OpenAI's image_url format.
         if is_claude:
