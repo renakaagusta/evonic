@@ -32,6 +32,25 @@ def execute(agent: dict, args: dict) -> dict:
         return {'error': "Missing required argument: 'script'"}
 
     # ------------------------------------------------------------------
+    # Long-running command guard (detect build commands, suggest tmux/screen)
+    # ------------------------------------------------------------------
+    from backend.tools.lib.long_running_guard import check_long_running
+
+    lr = check_long_running(script)
+    if lr:
+        return {
+            'error': 'Long-running command detected',
+            'level': 'long_running',
+            'matched_command': lr['matched_command'],
+            'suggestion': lr['suggestion'],
+            'run_script': lr['run_script'],
+            'log_file': lr['log_file'],
+            'monitor_script': lr['monitor_script'],
+            'check_status_script': lr['check_status_script'],
+            'check_exit_code_script': lr['check_exit_code_script'],
+        }
+
+    # ------------------------------------------------------------------
     # HMADS safety check (pipeline: system rules + custom user rules)
     # ------------------------------------------------------------------
     from backend.tools.lib.safety_pipeline import get_safety_pipeline
