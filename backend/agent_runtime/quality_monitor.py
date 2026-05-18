@@ -15,6 +15,7 @@ prevent infinite correction loops. The counter resets on any successful
 
 Part of the diet llm_loop.py refactor (Layout C / Pipeline).
 """
+from __future__ import annotations
 
 import json
 import logging

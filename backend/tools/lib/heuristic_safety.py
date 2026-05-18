@@ -19,6 +19,7 @@ Usage:
     # or
     result = check_safety(script, tool_type='bash')
 """
+from __future__ import annotations
 
 import ast
 import logging

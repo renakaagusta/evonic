@@ -3,6 +3,8 @@
 Generates 6-character alphanumeric codes using an unambiguous character set
 (excludes 0/O, 1/I/L to avoid visual confusion). Displayed as XXXXXX (no hyphen).
 """
+from __future__ import annotations
+
 from typing import Optional
 
 import random

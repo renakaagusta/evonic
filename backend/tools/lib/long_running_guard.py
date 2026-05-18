@@ -12,6 +12,7 @@ Usage:
         # result contains run_script, log_file, monitor_script, check_status_script
         ...
 """
+from __future__ import annotations
 
 import re
 import time
