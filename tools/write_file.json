@@ -1,10 +1,10 @@
 {
   "id": "write_file",
   "name": "Write File",
-  "description": "Write full content to a NEW file. Refuses to overwrite existing files — use str_replace for edits.",
+  "description": "Write full content to a NEW file. Refuses to overwrite existing files — use str_replace (or patch) for edits.",
   "function": {
     "name": "write_file",
-    "description": "Write content to a file at the specified path. Creates the file if it does not exist. IMPORTANT: This tool is for NEW files ONLY — it REFUSES to overwrite existing files. If the target file already exists, use the str_replace tool instead for surgical, line-level edits. Parent directories are created automatically by default.",
+    "description": "Write content to a file at the specified path. Creates the file if it does not exist. IMPORTANT: This tool is for NEW files ONLY — it REFUSES to overwrite existing files. If the target file already exists, use str_replace (or patch) instead for surgical, line-level edits. Parent directories are created automatically by default.",
     "parameters": {
       "type": "object",
       "properties": {
