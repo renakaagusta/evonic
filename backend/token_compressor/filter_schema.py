@@ -97,6 +97,11 @@ class CompiledFilter:
     # Where this filter was loaded from (for debugging / diagnostics).
     source: str = ""
 
+    # Names of TOML keys that were explicitly set in the source definition.
+    # Used by merge_filters() to distinguish "not specified" from
+    # "explicitly set to default/false/empty" during field-level merging.
+    _explicit_fields: set[str] = field(default_factory=set)
+
     def matches_command(self, command: str) -> bool:
         """Return True if this filter's command regex matches *command*."""
         return bool(self.command_re.search(command))
@@ -284,8 +289,11 @@ def _compile_filter(raw: dict, source: str) -> CompiledFilter:
             path=path_ref,
         )
 
+    # --- track which keys were explicitly set ---
+    explicit_fields = set(raw.keys())
+
     # --- warn about unknown keys ---
-    unknown = set(raw.keys()) - _VALID_KEYS
+    unknown = explicit_fields - _VALID_KEYS
     if unknown:
         import sys
         print(
@@ -308,6 +316,7 @@ def _compile_filter(raw: dict, source: str) -> CompiledFilter:
         max_lines=max_lines,
         on_empty=on_empty,
         source=source,
+        _explicit_fields=explicit_fields,
     )
 
 
@@ -356,6 +365,47 @@ def load_filter(path: str | Path) -> CompiledFilter:
         )
 
     return _compile_filter(table, source=str(path))
+
+
+def merge_filters(base: CompiledFilter, higher: CompiledFilter) -> CompiledFilter:
+    """Field-level merge of *higher* into *base*.
+
+    For each field that was explicitly set in *higher*, the higher value
+    takes precedence.  Fields not set in *higher* retain the value from
+    *base*.  List fields (replace, strip_lines, etc.) from *higher*
+    **replace** the base list entirely (they are not appended).
+
+    Args:
+        base: The lower-priority (built-in) filter.
+        higher: The higher-priority (agent or project) filter.
+
+    Returns:
+        A new CompiledFilter with merged fields.
+    """
+    if base.command_re.pattern != higher.command_re.pattern:
+        raise ValueError(
+            f"Cannot merge filters with different command_re: "
+            f"{base.command_re.pattern!r} vs {higher.command_re.pattern!r}"
+        )
+
+    explicit = higher._explicit_fields
+
+    return CompiledFilter(
+        command_re=higher.command_re,
+        description=higher.description if "description" in explicit else base.description,
+        strip_ansi=higher.strip_ansi if "strip_ansi" in explicit else base.strip_ansi,
+        replace=higher.replace if "replace" in explicit else base.replace,
+        match_output=higher.match_output if "match_output" in explicit else base.match_output,
+        strip_lines=higher.strip_lines if "strip_lines" in explicit else base.strip_lines,
+        keep_lines=higher.keep_lines if "keep_lines" in explicit else base.keep_lines,
+        truncate_lines_at=higher.truncate_lines_at if "truncate_lines_at" in explicit else base.truncate_lines_at,
+        head_lines=higher.head_lines if "head_lines" in explicit else base.head_lines,
+        tail_lines=higher.tail_lines if "tail_lines" in explicit else base.tail_lines,
+        max_lines=higher.max_lines if "max_lines" in explicit else base.max_lines,
+        on_empty=higher.on_empty if "on_empty" in explicit else base.on_empty,
+        source=f"{base.source} + {higher.source}",
+        _explicit_fields=base._explicit_fields | explicit,
+    )
 
 
 def load_filters_from_file(path: str | Path) -> list[CompiledFilter]:
@@ -460,6 +510,11 @@ def load_filters(
 
             for f in filters:
                 key = f.command_re.pattern
-                merged[key] = f
+                if key in merged:
+                    # Field-level merge: higher-priority filter overrides
+                    # only the fields it explicitly specifies.
+                    merged[key] = merge_filters(merged[key], f)
+                else:
+                    merged[key] = f
 
     return merged

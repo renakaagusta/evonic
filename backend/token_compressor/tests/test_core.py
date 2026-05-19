@@ -31,6 +31,7 @@ from token_compressor.filter_schema import (
     load_filter,
     load_filters,
     load_filters_from_file,
+    merge_filters,
     _compile_filter,
 )
 from token_compressor.filter_pipeline import compress as pipeline_compress
@@ -690,3 +691,170 @@ class TestBuiltinFilters:
         o = "line1\nline2\nline3\nline4\nline5\n"
         r = self._load_and_compress("read_file.toml", "cat /etc/hosts", o)
         assert len(r) > 0
+
+
+class TestMergeFilters:
+    def test_merge_head_lines_only(self):
+        builtin = _compile_filter({"command": "^pytest", "description": "pytest", "strip_ansi": True, "head_lines": 40}, source="builtin")
+        custom = _compile_filter({"command": "^pytest", "head_lines": 80}, source="agent")
+        merged = merge_filters(builtin, custom)
+        assert merged.head_lines == 80
+        assert merged.strip_ansi is True
+        assert merged.description == "pytest"
+
+    def test_merge_replaces_list_entirely(self):
+        builtin = _compile_filter({"command": "^pytest", "description": "pytest", "strip_lines": ["^collecting", "^tests/"]}, source="builtin")
+        custom = _compile_filter({"command": "^pytest", "strip_lines": ["^test_"]}, source="agent")
+        merged = merge_filters(builtin, custom)
+        assert len(merged.strip_lines) == 1
+        assert merged.strip_lines[0].search("test_foo")
+
+    def test_merge_additive_when_different_keys(self):
+        builtin = _compile_filter({"command": "^pytest", "description": "pytest", "strip_ansi": True, "head_lines": 40}, source="builtin")
+        custom = _compile_filter({"command": "^pytest", "tail_lines": 10, "on_empty": "No output"}, source="agent")
+        merged = merge_filters(builtin, custom)
+        assert merged.head_lines == 40
+        assert merged.tail_lines == 10
+        assert merged.on_empty == "No output"
+        assert merged.strip_ansi is True
+
+    def test_merge_different_command_raises(self):
+        builtin = _compile_filter({"command": "^git", "description": "git"}, source="builtin")
+        custom = _compile_filter({"command": "^pytest", "description": "pytest"}, source="agent")
+        import pytest as pt
+        with pt.raises(ValueError, match="different command_re"):
+            merge_filters(builtin, custom)
+
+    def test_merge_source_tracks_both(self):
+        builtin = _compile_filter({"command": "^pytest", "description": "a"}, source="builtin:python.toml")
+        custom = _compile_filter({"command": "^pytest", "head_lines": 10}, source="agent:python.toml")
+        merged = merge_filters(builtin, custom)
+        assert "builtin:python.toml" in merged.source
+        assert "agent:python.toml" in merged.source
+
+    def test_merge_strip_ansi_from_custom(self):
+        builtin = _compile_filter({"command": "^pytest", "description": "pytest", "strip_ansi": False}, source="builtin")
+        custom = _compile_filter({"command": "^pytest", "strip_ansi": True}, source="agent")
+        merged = merge_filters(builtin, custom)
+        assert merged.strip_ansi is True
+
+    def test_merge_preserves_base_when_custom_unspecified(self):
+        builtin = _compile_filter({"command": "^pytest", "description": "pytest", "strip_ansi": True, "head_lines": 40, "tail_lines": 5}, source="builtin")
+        custom = _compile_filter({"command": "^pytest", "head_lines": 80}, source="agent")
+        merged = merge_filters(builtin, custom)
+        assert merged.head_lines == 80
+        assert merged.tail_lines == 5
+        assert merged.strip_ansi is True
+
+
+class TestAgentProjectFilters:
+    def test_scan_agent_filters(self, tmp_path, monkeypatch):
+        ag_dir = tmp_path / "agents" / "test_agent" / "kb" / "filters"
+        ag_dir.mkdir(parents=True)
+        (ag_dir / "python.toml").write_text(
+            '[filter]\ncommand = "^pytest"\ndescription = "agent-pytest"\nhead_lines = 80\n'
+        )
+        with monkeypatch.context() as m:
+            m.chdir(tmp_path)
+            reg = CompressorRegistry()
+            result = reg._scan_agent_filters("test_agent")
+            assert len(result) == 1
+            assert "^pytest" in result
+            assert result["^pytest"].head_lines == 80
+
+    def test_agent_merges_field_level(self, tmp_path, monkeypatch):
+        builtin_dir = tmp_path / "filters" / "builtin"
+        builtin_dir.mkdir(parents=True)
+        (builtin_dir / "python.toml").write_text(
+            '[filter]\ncommand = "^pytest"\nstrip_ansi = true\nhead_lines = 40\n'
+        )
+        ag_dir = tmp_path / "agents" / "myag" / "kb" / "filters"
+        ag_dir.mkdir(parents=True)
+        (ag_dir / "python.toml").write_text(
+            '[filter]\ncommand = "^pytest"\nhead_lines = 80\n'
+        )
+        with monkeypatch.context() as m:
+            m.chdir(tmp_path)
+            from backend.token_compressor.compressor_registry import _BUILTIN_DIR
+            reg = CompressorRegistry(agent_id="myag")
+            reg._filters = load_filters(builtin_dir=str(builtin_dir))
+            agent_f = reg._scan_agent_filters("myag")
+            for k, af in agent_f.items():
+                if k in reg._filters:
+                    reg._filters[k] = merge_filters(reg._filters[k], af)
+                else:
+                    reg._filters[k] = af
+            filt = reg._filters.get("^pytest")
+            assert filt is not None
+            assert filt.head_lines == 80
+            assert filt.strip_ansi is True
+
+    def test_project_highest_priority(self, tmp_path, monkeypatch):
+        builtin_dir = tmp_path / "filters" / "builtin"
+        builtin_dir.mkdir(parents=True)
+        (builtin_dir / "python.toml").write_text(
+            '[filter]\ncommand = "^pytest"\nstrip_ansi = true\nhead_lines = 40\n'
+        )
+        ag_dir = tmp_path / "agents" / "ag" / "kb" / "filters"
+        ag_dir.mkdir(parents=True)
+        (ag_dir / "python.toml").write_text(
+            '[filter]\ncommand = "^pytest"\nhead_lines = 80\ntail_lines = 10\n'
+        )
+        proj_dir = tmp_path / ".evonic" / "filters"
+        proj_dir.mkdir(parents=True)
+        (proj_dir / "python.toml").write_text(
+            '[filter]\ncommand = "^pytest"\nhead_lines = 60\n'
+        )
+        with monkeypatch.context() as m:
+            m.chdir(tmp_path)
+            reg = CompressorRegistry(agent_id="ag", project_root=tmp_path)
+            reg._filters = load_filters(builtin_dir=str(builtin_dir))
+            agent_f = reg._scan_agent_filters("ag")
+            for k, af in agent_f.items():
+                if k in reg._filters:
+                    reg._filters[k] = merge_filters(reg._filters[k], af)
+                else:
+                    reg._filters[k] = af
+            proj_f = reg._scan_project_filters(tmp_path)
+            for k, pf in proj_f.items():
+                if k in reg._filters:
+                    reg._filters[k] = merge_filters(reg._filters[k], pf)
+                else:
+                    reg._filters[k] = pf
+            filt = reg._filters.get("^pytest")
+            assert filt.head_lines == 60
+            assert filt.strip_ansi is True
+            assert filt.tail_lines == 10
+
+    def test_full_load_with_agent_and_project(self, tmp_path, monkeypatch):
+        builtin_dir = tmp_path / "filters" / "builtin"
+        builtin_dir.mkdir(parents=True)
+        (builtin_dir / "python.toml").write_text(
+            '[filter]\ncommand = "^pytest"\nstrip_ansi = true\nhead_lines = 40\n'
+        )
+        ag_dir = tmp_path / "agents" / "myag" / "kb" / "filters"
+        ag_dir.mkdir(parents=True)
+        (ag_dir / "python.toml").write_text(
+            '[filter]\ncommand = "^pytest"\nhead_lines = 80\n'
+        )
+        proj_dir = tmp_path / ".evonic" / "filters"
+        proj_dir.mkdir(parents=True)
+        (proj_dir / "python.toml").write_text(
+            '[filter]\ncommand = "^pytest"\nhead_lines = 60\n'
+        )
+        with monkeypatch.context() as m:
+            m.chdir(tmp_path)
+            import backend.token_compressor.compressor_registry as cr
+            original = cr._BUILTIN_DIR
+            cr._BUILTIN_DIR = builtin_dir
+            try:
+                from backend.token_compressor.compressor_registry import reset_registry, get_registry
+                reset_registry()
+                reg = get_registry(agent_id="myag", project_root=tmp_path)
+                filt = reg.lookup("pytest test.py")
+                assert filt is not None
+                assert filt.head_lines == 60
+                assert filt.strip_ansi is True
+            finally:
+                cr._BUILTIN_DIR = original
+                reset_registry()
