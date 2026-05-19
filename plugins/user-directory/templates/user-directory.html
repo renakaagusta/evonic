@@ -6,7 +6,7 @@
   <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
     <div>
       <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">User Directory</h2>
-      <p class="text-sm text-gray-500 mt-1">Manage users, groups, and access control rules</p>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage users, groups, and access control rules</p>
     </div>
   </div>
 
@@ -44,7 +44,7 @@
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="bg-gray-50 dark:bg-slate-700/50">
+            <tr class="bg-gray-50 dark:bg-gray-700/50">
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ID</th>
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Name</th>
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</th>
@@ -54,7 +54,7 @@
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
-          <tbody id="user-table-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+          <tbody id="user-table-body" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
         </table>
       </div>
       <div id="user-pagination" class="flex gap-1 justify-center mt-4"></div>
@@ -72,7 +72,7 @@
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="bg-gray-50 dark:bg-slate-700/50">
+            <tr class="bg-gray-50 dark:bg-gray-700/50">
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ID</th>
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Name</th>
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Description</th>
@@ -80,7 +80,7 @@
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
-          <tbody id="group-table-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+          <tbody id="group-table-body" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
         </table>
       </div>
     </div>
@@ -97,7 +97,7 @@
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="bg-gray-50 dark:bg-slate-700/50">
+            <tr class="bg-gray-50 dark:bg-gray-700/50">
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Pattern</th>
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Effect</th>
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Priority</th>
@@ -107,7 +107,7 @@
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
-          <tbody id="tag-rule-table-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+          <tbody id="tag-rule-table-body" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
         </table>
       </div>
     </div>
@@ -117,15 +117,15 @@
 <!-- User Detail Modal -->
 <div id="user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
   <div class="absolute inset-0 bg-black/50" onclick="closeModal('user-modal')"></div>
-  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-3xl max-h-[85vh] overflow-y-auto m-4">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+  <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[95%] max-w-3xl max-h-[85vh] overflow-y-auto m-4">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
       <h2 id="user-modal-title" class="text-base font-semibold text-gray-900 dark:text-gray-100">User Detail</h2>
       <button onclick="closeModal('user-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
     <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
       <!-- Profile -->
       <div>
-        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 pb-1 border-b border-gray-100 dark:border-slate-700">Profile</h3>
+        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 pb-1 border-b border-gray-100 dark:border-gray-700">Profile</h3>
         <div class="space-y-2 text-sm mb-4">
           <div class="flex"><span class="w-28 text-gray-500 dark:text-gray-400 font-medium shrink-0">ID</span><span id="detail-id" class="text-gray-900 dark:text-gray-100 break-all font-mono text-xs"></span></div>
           <div class="flex"><span class="w-28 text-gray-500 dark:text-gray-400 font-medium shrink-0">Name</span><span id="detail-name" class="text-gray-900 dark:text-gray-100"></span></div>
@@ -138,58 +138,58 @@
         <div class="flex gap-2 flex-wrap">
           <button onclick="editUser()" class="px-3 py-1.5 text-xs font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Edit</button>
           <button onclick="blockUser()" class="px-3 py-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">Block / Unblock</button>
-          <button onclick="showHardDeleteConfirm()" class="px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors">Hard Delete</button>
+          <button onclick="showHardDeleteConfirm()" class="px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors">Hard Delete</button>
         </div>
       </div>
       <!-- Right side -->
       <div class="space-y-5">
         <!-- Tags -->
         <div>
-          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-slate-700">Tags</h3>
+          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-gray-700">Tags</h3>
           <div id="detail-tags" class="flex flex-wrap gap-1 mb-2 min-h-[1.5rem]"></div>
           <div class="flex gap-2">
             <input type="text" id="new-tag-input" placeholder="Add tag..."
-              class="flex-1 border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+              class="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
             <button onclick="addTag()" class="px-2 py-1 text-xs font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Add</button>
           </div>
         </div>
         <!-- Contacts -->
         <div>
-          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-slate-700">Contacts</h3>
+          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-gray-700">Contacts</h3>
           <table class="w-full text-xs mb-2">
             <thead>
-              <tr class="bg-gray-50 dark:bg-slate-700/50">
+              <tr class="bg-gray-50 dark:bg-gray-700/50">
                 <th class="px-2 py-1 text-left text-gray-500 dark:text-gray-400">Type</th>
                 <th class="px-2 py-1 text-left text-gray-500 dark:text-gray-400">Value</th>
                 <th class="px-2 py-1 text-left text-gray-500 dark:text-gray-400">Primary</th>
                 <th class="px-2 py-1 text-left text-gray-500 dark:text-gray-400">Actions</th>
               </tr>
             </thead>
-            <tbody id="detail-contacts-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+            <tbody id="detail-contacts-body" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
           </table>
           <div class="flex gap-2 flex-wrap">
             <select id="new-contact-type"
-              class="border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+              class="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
               <option value="whatsapp">WhatsApp</option>
               <option value="telegram">Telegram</option>
               <option value="email">Email</option>
             </select>
             <input type="text" id="new-contact-value" placeholder="Value..."
-              class="flex-1 min-w-0 border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+              class="flex-1 min-w-0 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
             <button onclick="addContact()" class="px-2 py-1 text-xs font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Add</button>
           </div>
         </div>
         <!-- Audit Log -->
         <div>
-          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-slate-700">Audit Log</h3>
+          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-gray-700">Audit Log</h3>
           <div id="detail-audit" class="max-h-36 overflow-y-auto text-xs space-y-0.5"></div>
         </div>
         <!-- Access Control -->
         <div>
-          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-slate-700">Access Control</h3>
+          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-gray-700">Access Control</h3>
           <div id="detail-access-info" class="text-xs max-h-36 overflow-y-auto text-gray-500 dark:text-gray-400 mb-2">Click "Check Access" to evaluate</div>
           <button onclick="checkAccessControl()"
-            class="px-2 py-1 text-xs font-medium border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors">
+            class="px-2 py-1 text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
             Check Access
           </button>
         </div>
@@ -206,23 +206,23 @@
 <!-- Edit User Modal -->
 <div id="edit-user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
   <div class="absolute inset-0 bg-black/50" onclick="closeModal('edit-user-modal')"></div>
-  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-md m-4">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+  <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[95%] max-w-md m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
       <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Edit User</h2>
       <button onclick="closeModal('edit-user-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
     <div class="p-5 space-y-3">
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-        <input type="text" id="edit-name" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <input type="text" id="edit-name" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
-        <textarea id="edit-notes" rows="3" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
+        <textarea id="edit-notes" rows="3" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ERP Sync Enabled</label>
-        <select id="edit-erp" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <select id="edit-erp" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
           <option value="1">Yes</option>
           <option value="0">No</option>
         </select>
@@ -235,19 +235,19 @@
 <!-- Create User Modal -->
 <div id="create-user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
   <div class="absolute inset-0 bg-black/50" onclick="closeModal('create-user-modal')"></div>
-  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-md m-4">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+  <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[95%] max-w-md m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
       <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Create User</h2>
       <button onclick="closeModal('create-user-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
     <div class="p-5 space-y-3">
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-        <input type="text" id="create-name" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <input type="text" id="create-name" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
-        <textarea id="create-notes" rows="3" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
+        <textarea id="create-notes" rows="3" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
       </div>
       <button onclick="createUser()" class="px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Create</button>
     </div>
@@ -257,19 +257,19 @@
 <!-- Create Group Modal -->
 <div id="create-group-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
   <div class="absolute inset-0 bg-black/50" onclick="closeModal('create-group-modal')"></div>
-  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-md m-4">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+  <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[95%] max-w-md m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
       <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Create Group</h2>
       <button onclick="closeModal('create-group-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
     <div class="p-5 space-y-3">
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-        <input type="text" id="create-group-name" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <input type="text" id="create-group-name" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-        <textarea id="create-group-desc" rows="3" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
+        <textarea id="create-group-desc" rows="3" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
       </div>
       <button onclick="createGroup()" class="px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Create</button>
     </div>
@@ -279,8 +279,8 @@
 <!-- Hard Delete Confirm Modal -->
 <div id="hard-delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
   <div class="absolute inset-0 bg-black/50" onclick="closeModal('hard-delete-modal')"></div>
-  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-sm m-4">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+  <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[95%] max-w-sm m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
       <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Confirm Hard Delete</h2>
       <button onclick="closeModal('hard-delete-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
@@ -294,15 +294,15 @@
 <!-- Merge User Modal -->
 <div id="merge-user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
   <div class="absolute inset-0 bg-black/50" onclick="closeModal('merge-user-modal')"></div>
-  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-sm m-4">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+  <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[95%] max-w-sm m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
       <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Merge User</h2>
       <button onclick="closeModal('merge-user-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
     <div class="p-5 space-y-3">
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Target User ID</label>
-        <input type="text" id="merge-target-id" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <input type="text" id="merge-target-id" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
       <p class="text-xs text-gray-500 dark:text-gray-400">This user will be merged INTO the target. Source will be soft-deleted.</p>
       <button onclick="confirmMergeUser()" class="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">Merge</button>
@@ -313,23 +313,23 @@
 <!-- Create/Edit Tag Rule Modal -->
 <div id="tag-rule-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
   <div class="absolute inset-0 bg-black/50" onclick="closeModal('tag-rule-modal')"></div>
-  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-md m-4 max-h-[90vh] overflow-y-auto">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+  <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[95%] max-w-md m-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
       <h2 id="tag-rule-modal-title" class="text-base font-semibold text-gray-900 dark:text-gray-100">Create Tag Rule</h2>
       <button onclick="closeModal('tag-rule-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
     <div class="p-5 space-y-3">
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Rule ID</label>
-        <input type="text" id="tr-id" placeholder="e.g. custom_vip_allow" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <input type="text" id="tr-id" placeholder="e.g. custom_vip_allow" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Tag Pattern</label>
-        <input type="text" id="tr-pattern" placeholder="e.g. vip, agent:*, role:admin" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <input type="text" id="tr-pattern" placeholder="e.g. vip, agent:*, role:admin" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Effect</label>
-        <select id="tr-effect" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <select id="tr-effect" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
           <option value="allow_all">allow_all</option>
           <option value="deny">deny</option>
           <option value="require_role">require_role</option>
@@ -339,15 +339,15 @@
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Priority (higher = evaluated first)</label>
-        <input type="number" id="tr-priority" value="5" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <input type="number" id="tr-priority" value="5" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
       <div id="tr-config-group" class="hidden">
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Config (JSON, e.g. {"roles": ["admin"]})</label>
-        <textarea id="tr-config" rows="3" placeholder='{"roles": ["admin"]}' class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
+        <textarea id="tr-config" rows="3" placeholder='{"roles": ["admin"]}' class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-        <input type="text" id="tr-desc" placeholder="What this rule does" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <input type="text" id="tr-desc" placeholder="What this rule does" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
       <button onclick="saveTagRule()" class="px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Save</button>
     </div>
@@ -357,8 +357,8 @@
 <!-- Group Detail Modal -->
 <div id="group-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
   <div class="absolute inset-0 bg-black/50" onclick="closeModal('group-modal')"></div>
-  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-lg m-4">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+  <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[95%] max-w-lg m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
       <h2 id="group-modal-title" class="text-base font-semibold text-gray-900 dark:text-gray-100">Group Detail</h2>
       <button onclick="closeModal('group-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
@@ -378,12 +378,12 @@ function badge(color) {
     green:  'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     red:    'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     orange: 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-    gray:   'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300',
+    gray:   'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
     blue:   'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   };
   return map[color] || map.gray;
 }
-const btnSm = 'px-2 py-1 text-xs font-medium border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors';
+const btnSm = 'px-2 py-1 text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors';
 const btnDanger = 'px-2 py-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors';
 
 const TAB_BTN_ACTIVE   = 'px-5 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 -mb-px transition-colors';
@@ -452,7 +452,7 @@ async function loadUsers() {
       const statusLabel = u.is_approved === 2 ? 'Blocked' : u.is_approved === 1 ? 'Approved' : 'Pending';
       const statusColor = u.is_approved === 2 ? 'red' : u.is_approved === 1 ? 'green' : 'orange';
       const tr = document.createElement('tr');
-      tr.className = 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50';
+      tr.className = 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50';
       tr.onclick = () => showUserDetail(u.id);
       tr.innerHTML = `
         <td class="px-3 py-2 text-gray-900 dark:text-gray-100 font-mono text-xs">${u.id}</td>
@@ -560,7 +560,7 @@ async function loadUserAudit(id) {
   try {
     const data = await api('GET', `/api/user-directory/users/${id}/audit`);
     document.getElementById('detail-audit').innerHTML = data.logs.slice(0, 20).map(l =>
-      `<div class="py-0.5 border-b border-gray-100 dark:border-slate-700 text-gray-600 dark:text-gray-400">${l.created_at || ''} <strong class="text-gray-800 dark:text-gray-200">${l.action}</strong> ${l.details ? JSON.stringify(l.details) : ''}</div>`
+      `<div class="py-0.5 border-b border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400">${l.created_at || ''} <strong class="text-gray-800 dark:text-gray-200">${l.action}</strong> ${l.details ? JSON.stringify(l.details) : ''}</div>`
     ).join('');
   } catch (e) { /* ignore */ }
 }
@@ -654,7 +654,7 @@ async function loadGroups() {
     tbody.innerHTML = '';
     data.groups.forEach(g => {
       const tr = document.createElement('tr');
-      tr.className = 'hover:bg-gray-50 dark:hover:bg-slate-700/50';
+      tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
       tr.innerHTML = `<td class="px-3 py-2 text-gray-900 dark:text-gray-100 font-mono text-xs">${g.id}</td><td class="px-3 py-2 text-gray-900 dark:text-gray-100 font-medium">${g.name}</td><td class="px-3 py-2 text-gray-500 dark:text-gray-400">${g.description || '-'}</td><td class="px-3 py-2 text-gray-600 dark:text-gray-400">${g.member_count || 0}</td><td class="px-3 py-2 flex gap-1"><button class="${btnSm}" onclick="showGroupDetail('${g.id}')">Manage</button><button class="${btnSm}" onclick="deleteGroup('${g.id}')">Delete</button></td>`;
       tbody.appendChild(tr);
     });
@@ -716,9 +716,9 @@ async function loadTagRules() {
     data.rules.forEach(r => {
       const eColor = r.effect === 'allow_all' ? 'green' : r.effect === 'deny' ? 'red' : r.effect === 'require_role' ? 'orange' : r.effect === 'match_agent' ? 'blue' : 'gray';
       const tr = document.createElement('tr');
-      tr.className = 'hover:bg-gray-50 dark:hover:bg-slate-700/50';
+      tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
       tr.innerHTML = `
-        <td class="px-3 py-2"><code class="bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded text-xs">${r.tag_pattern}</code></td>
+        <td class="px-3 py-2"><code class="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded text-xs">${r.tag_pattern}</code></td>
         <td class="px-3 py-2"><span class="${badge(eColor)}">${r.effect}</span></td>
         <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${r.priority}</td>
         <td class="px-3 py-2 text-gray-500 dark:text-gray-400 text-xs max-w-[120px] truncate">${r.config !== '{}' ? r.config : '-'}</td>
