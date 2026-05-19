@@ -51,6 +51,24 @@ from backend.agent_runtime.output_parser import (
 
 from models.db import db
 from backend.llm_client import llm_client, strip_thinking_tags, LLMClient, _split_trailing_think_close
+
+# ── Tiktoken-based token counter (cached encoding) ────────────────────────
+_tiktoken_enc = None
+
+def _count_tokens(text: str) -> int:
+    """Count tokens using tiktoken cl100k_base. Falls back to len//4."""
+    global _tiktoken_enc
+    if not text:
+        return 0
+    try:
+        if _tiktoken_enc is None:
+            import tiktoken
+            _tiktoken_enc = tiktoken.get_encoding("cl100k_base")
+        return len(_tiktoken_enc.encode(text))
+    except Exception:
+        return len(text) // 4
+
+
 def _persist_agent_state_split(ms, agent_id, session_id, db_agent_id=None):
     """Persist agent state, splitting per-session vs global fields.
 
@@ -84,8 +102,7 @@ def _persist_agent_state_split(ms, agent_id, session_id, db_agent_id=None):
 from backend.tools import tool_registry
 from config import (AGENT_MAX_TOOL_ITERATIONS as MAX_TOOL_ITERATIONS,
                     AGENT_MAX_TOOL_RESULT_CHARS as MAX_TOOL_RESULT_CHARS,
-                    AGENT_TIMEOUT_RETRIES as MAX_TIMEOUT_RETRIES,
-                    THINKING_BUDGET as DEFAULT_THINKING_BUDGET)
+                    AGENT_TIMEOUT_RETRIES as MAX_TIMEOUT_RETRIES)
 
 # RTK token compressor — lazy-init, do NOT load on module import
 _rtk_registry = None
@@ -301,16 +318,12 @@ def run_tool_loop(agent: Dict[str, Any],
     # Create LLMClient with resolved model config
     llm = LLMClient(model_config=agent_model_config) if agent_model_config else llm_client
 
-    # Resolve thinking budget: per-model config takes precedence over global default.
-    # Only active when the model actually supports thinking (thinking=True).
+    # Resolve thinking budget: only active when explicitly set per-model (thinking_budget > 0).
+    # Models with thinking_budget=0 have no cap — intended for large models that benefit
+    # from extended reasoning. Set thinking_budget per-model in Settings for small models.
     _model_thinking = bool((agent_model_config or {}).get('thinking', False))
     _model_think_budget = int((agent_model_config or {}).get('thinking_budget', 0) or 0)
-    if _model_thinking and _model_think_budget > 0:
-        _thinking_budget = _model_think_budget
-    elif _model_thinking:
-        _thinking_budget = DEFAULT_THINKING_BUDGET
-    else:
-        _thinking_budget = 0  # no-op for non-thinking models
+    _thinking_budget = _model_think_budget if _model_thinking else 0
     _logger.debug("Thinking budget: %d tokens (model_thinking=%s, model_budget=%d)",
                   _thinking_budget, _model_thinking, _model_think_budget)
 
@@ -374,7 +387,9 @@ def run_tool_loop(agent: Dict[str, Any],
     for _pre_inj in _pre_run_interceptors(agent_id, '', messages):
         messages.append(_pre_inj)
 
-    _iteration = 0
+    _iteration = 0          # counts actual tool-call rounds (what the user sees)
+    _llm_call_count = 0      # counts every LLM API call (safety net for non-tool loops)
+    _max_llm_calls = max_tool_iterations * 10  # hard cap on total LLM calls
     _injection_count = 0  # total injections in this loop run (capped to prevent infinite loops)
     # Track whether we've already done a tool-call iteration (kept for future use).
     _had_tool_call_iteration = False
@@ -413,7 +428,12 @@ def run_tool_loop(agent: Dict[str, Any],
             }
 
     while _iteration < max_tool_iterations:
-        _iteration += 1
+        _llm_call_count += 1
+        # Hard cap on total LLM API calls (safety net for non-tool loops like
+        # thinking budget retries, empty response recovery, continuation nudges).
+        if _llm_call_count > _max_llm_calls:
+            _logger.error("Maximum LLM calls reached (%d) without finishing — aborting", _max_llm_calls)
+            break
         # Drain injected user messages from mid-loop injection queue.
         # Multiple queued messages are merged into one to avoid consecutive user turns.
         if inject_queue is not None:
@@ -509,13 +529,9 @@ def run_tool_loop(agent: Dict[str, Any],
                             )
 
         # LOCK ORDERING: Main path — llm_lock only. No other locks held here.
-        # Always keep thinking enabled if the model supports it. Previously this
-        # was disabled after the first tool-call iteration to work around a
-        # DeepSeek-R1 bug, but newer DeepSeek models (v4+) reject requests that
-        # contain reasoning_content in messages without the thinking parameter.
-        # Since reasoning_content is now persisted to DB and passed back correctly,
-        # keeping thinking enabled works for both old and new models.
-        _enable_thinking_this_call = True
+        # Keep thinking enabled unless the thinking budget was exceeded, in which
+        # case we disable thinking to force the model to commit without deliberating.
+        _enable_thinking_this_call = not _thinking_budget_aborted
         _logger.info("[LOCK] _llm_lock - WAITING (session=%s, main LLM call)", session_id)
         with llm_lock:
             _logger.info("[LOCK] _llm_lock - ACQUIRED (session=%s, main LLM call)", session_id)
@@ -828,7 +844,7 @@ def run_tool_loop(agent: Dict[str, Any],
         # response and retry with thinking disabled to force commitment.
         if _thinking_budget > 0 and not _thinking_budget_aborted:
             _thinking_text = reasoning_text or thinking or ''
-            _new_tokens = len(_thinking_text) // 4  # rough estimate: ~4 chars/token
+            _new_tokens = _count_tokens(_thinking_text)
             _thinking_token_count += _new_tokens
             if _thinking_token_count > _thinking_budget:
                 _thinking_budget_aborted = True
@@ -1574,6 +1590,9 @@ def run_tool_loop(agent: Dict[str, Any],
         if _pool is not None:
             _pool.shutdown(wait=False)
 
+        # Count this as one tool iteration (what the user sees as "iterations")
+        _iteration += 1
+
         # Tool calls executed successfully — reset continuation nudge counter
         _continuation_nudge_count = 0
         # Reset quality monitor correction counter on successful tool-execution turn
@@ -1623,9 +1642,9 @@ def run_tool_loop(agent: Dict[str, Any],
         for inj_msg in run_message_interceptors(agent_id, content, messages):
             messages.append(inj_msg)
 
-    _logger.error("Maximum tool iterations reached (%d)", max_tool_iterations)
+    _logger.error("Maximum tool iterations reached (%d tool rounds, %d LLM calls)", _iteration, _llm_call_count)
     error_msg = (
-        f"LLM Error: Maximum tool iterations reached ({max_tool_iterations}). "
+        f"LLM Error: Maximum tool iterations reached ({_iteration} tool rounds, {_llm_call_count} LLM calls). "
         f"The model could not produce a final answer within this limit. "
         f"You can increase this limit in System Settings → General → Max Tool Iterations."
     )

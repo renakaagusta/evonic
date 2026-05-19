@@ -211,11 +211,10 @@ AGENT_TIMEOUT_RETRIES = _get_env_int("AGENT_TIMEOUT_RETRIES", 2, min_val=0, max_
 AGENT_QUEUE_WORKERS = _get_env_int("AGENT_QUEUE_WORKERS", 5, min_val=1, max_val=32)
 
 # Thinking budget cap for small reasoning models (tokens per turn).
-# When a thinking model exceeds this many tokens in its reasoning content,
-# the turn is aborted and retried with thinking disabled to force the model
-# to stop deliberating and commit to an implementation.
-# Set via THINKING_BUDGET env var or per-model thinking_budget field in DB.
-THINKING_BUDGET = _get_env_int("THINKING_BUDGET", 2048, min_val=64, max_val=32768)
+# Only active when explicitly set per-model via thinking_budget field in DB.
+# Models with thinking_budget=0 have no cap (disabled by default).
+# This value is used as reference/documentation only — not auto-applied.
+THINKING_BUDGET = _get_env_int("THINKING_BUDGET", 4096, min_val=64, max_val=32768)
 
 # Release version (written by supervisor during staging; "dev" in flat-repo mode)
 EVONIC_VERSION = "dev"
