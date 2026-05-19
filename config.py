@@ -30,6 +30,22 @@ else:
 _logger = logging.getLogger(__name__)
 
 
+def _get_env_bool(name: str, default: bool, invert: bool = False) -> bool:
+    """Read a boolean environment variable.
+
+    Args:
+        name: Environment variable name.
+        default: Default value when env var is not set.
+        invert: If True, invert the result (e.g. RTK_NO_COMPRESS=1 means disabled).
+    """
+    raw = os.getenv(name, "")
+    if raw == "":
+        result = default
+    else:
+        result = raw.lower() in ("1", "true", "yes", "on")
+    return not result if invert else result
+
+
 def _get_env_int(name: str, default: int, min_val: int = None, max_val: int = None) -> int:
     """Read an integer environment variable with validation and bounds clamping."""
     try:
@@ -183,6 +199,13 @@ CONNECTOR_PAIRING_CODE_TTL = _get_env_int("CONNECTOR_PAIRING_CODE_TTL", 300, min
 AGENT_MAX_TOOL_ITERATIONS = _get_env_int("AGENT_MAX_TOOL_ITERATIONS", 100, min_val=1, max_val=1000)
 EVAL_MAX_TOOL_ITERATIONS = _get_env_int("EVAL_MAX_TOOL_ITERATIONS", 30, min_val=1, max_val=500)
 AGENT_MAX_TOOL_RESULT_CHARS = _get_env_int("AGENT_MAX_TOOL_RESULT_CHARS", 8000, min_val=1, max_val=1_048_576)
+
+# RTK token compression — per-agent toggle with env var control
+# TOOL_COMPRESSION_ENABLED: True unless RTK_NO_COMPRESS=1 (env var force-disables)
+# TOOL_COMPRESSION_VERBOSE: True if RTK_VERBOSE=1 (logs pre/post compression stats)
+TOOL_COMPRESSION_ENABLED = _get_env_bool("RTK_NO_COMPRESS", False, invert=True)
+TOOL_COMPRESSION_VERBOSE = _get_env_bool("RTK_VERBOSE", False)
+
 AGENT_MAX_SUMMARIZE_BATCH = _get_env_int("AGENT_MAX_SUMMARIZE_BATCH", 20, min_val=1, max_val=500)
 AGENT_TIMEOUT_RETRIES = _get_env_int("AGENT_TIMEOUT_RETRIES", 2, min_val=0, max_val=20)
 AGENT_QUEUE_WORKERS = _get_env_int("AGENT_QUEUE_WORKERS", 5, min_val=1, max_val=32)
