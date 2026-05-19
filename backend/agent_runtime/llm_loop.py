@@ -87,6 +87,117 @@ from config import (AGENT_MAX_TOOL_ITERATIONS as MAX_TOOL_ITERATIONS,
                     AGENT_TIMEOUT_RETRIES as MAX_TIMEOUT_RETRIES,
                     THINKING_BUDGET as DEFAULT_THINKING_BUDGET)
 
+# RTK token compressor — lazy-init, do NOT load on module import
+_rtk_registry = None
+
+
+def _extract_bash_command(script: str) -> str:
+    """Extract the real command from a multi-line bash script.
+
+    Looks for the last substantive command line, skipping:
+    - empty lines and comments (#)
+    - plain 'cd', 'export', 'set' directives
+    - shell meta-noise (shebang lines, trap, exec redirects)
+    """
+    if not script:
+        return "bash"
+    lines = [l.strip() for l in script.split("\n")]
+    candidates = []
+    for line in reversed(lines):
+        if not line or line.startswith("#") or line.startswith("#!/"):
+            continue
+        # Skip meta-directives
+        if line.startswith(("cd ", "export ", "set ", "trap ", "exec ", "echo ")):
+            continue
+        candidates.insert(0, line)
+    if not candidates:
+        return "bash"
+    # Take first (chronologically last substantive) command, strip pipes to get base
+    cmd = candidates[-1]
+    # Strip leading env vars: FOO=bar cmd -> cmd
+    cmd = re.sub(r"^\s*(?:\w+=[^\s]+\s+)+", "", cmd)
+    # Get the base command name (first word before pipe/redirect/semicolon)
+    base = re.split(r"[|;&<>]", cmd)[0].strip().split()[0] if cmd.split() else "bash"
+    return base
+
+
+def _extract_python_command(code: str) -> str:
+    """Detect likely Python command from code content.
+
+    Heuristics:
+    - 'import pytest' / 'from pytest import ...' -> pytest
+    - 'import unittest' -> python -m unittest
+    - 'subprocess.run' -> the command inside subprocess
+    - Otherwise -> python
+    """
+    if not code:
+        return "python"
+    # Check for known test / tool patterns
+    for line in code.split("\n"):
+        stripped = line.strip()
+        if re.match(r"^(?:import\s+pytest|from\s+pytest\s)", stripped):
+            return "pytest"
+        if re.match(r"^(?:import\s+unittest|from\s+unittest\s)", stripped):
+            return "python -m unittest"
+        if "subprocess.run" in stripped or "subprocess.call" in stripped:
+            return "python subprocess"
+    return "python"
+
+
+def _get_rtk_registry():
+    """Lazy-init the RTK compressor registry. Safe to call from hot paths."""
+    global _rtk_registry
+    if _rtk_registry is None:
+        from backend.token_compressor.compressor_registry import get_registry
+        _rtk_registry = get_registry()
+    return _rtk_registry
+
+
+def _extract_command(tool_name: str, args: dict) -> str:
+    """Derive a command hint for compressor filter matching.
+
+    Produces strings like "git status", "pytest", "read src/main.py", etc.
+    Used by split-path compression to pick the right TOML filter.
+    """
+    if tool_name == 'bash':
+        script = args.get('script', '')
+        if not script:
+            return 'bash'
+        for line in script.strip().split('\n'):
+            s = line.strip()
+            if not s or s.startswith('#'):
+                continue
+            if s.startswith(('cd ', 'export ', 'set ', 'echo ')):
+                continue
+            return s[:120]
+        return 'bash'
+
+    if tool_name == 'runpy':
+        code = args.get('code', '')
+        if not code:
+            return 'python'
+        for line in code.strip().split('\n')[:5]:
+            s = line.strip()
+            if s.startswith('import pytest'):
+                return 'pytest'
+            if s.startswith('import unittest'):
+                return 'python -m unittest'
+            if 'subprocess.run' in s or 'subprocess.call' in s:
+                return 'python'
+            if 'os.system' in s:
+                return 'python'
+        return 'python'
+
+    if tool_name == 'read_file':
+        fp = args.get('file_path', '')
+        return f'read {fp}' if fp else 'read'
+
+    if tool_name == 'write_file':
+        fp = args.get('file_path', '')
+        return f'write {fp}' if fp else 'write'
+
+    return tool_name
+
 
 def run_tool_loop(agent: Dict[str, Any],
                   agent_context: dict,
@@ -1450,33 +1561,33 @@ def run_tool_loop(agent: Dict[str, Any],
             except (TypeError, ValueError):
                 result_str = str(tool_result)
 
-            # Truncate for LLM context; UI also uses this so display matches what LLM sees
-            if len(result_str) > MAX_TOOL_RESULT_CHARS:
-                remaining = len(result_str) - MAX_TOOL_RESULT_CHARS
-                llm_result_str = (result_str[:MAX_TOOL_RESULT_CHARS] +
-                                  f"\n...[truncated — {remaining} chars omitted]")
-            else:
-                llm_result_str = result_str
+            # --- Determine exit_code for compressor ---
+            _exit_code = 0
+            if isinstance(tool_result, dict):
+                _exit_code = tool_result.get('exit_code', 0)
 
-            # Structured result for timeline/UI — mirrors what LLM receives
-            if llm_result_str == result_str:
-                # No truncation: use structured dict for richer display
-                if isinstance(tool_result, dict):
-                    result_dict = tool_result
-                elif isinstance(tool_result, list):
-                    result_dict = {"data": tool_result}
-                elif isinstance(tool_result, str):
-                    result_dict = {"data": tool_result}
+            # --- RTK split-path compression ---
+            try:
+                _cmd = _extract_command(fn_name, args)
+                compressed_str = _get_rtk_registry().compress(_cmd, _exit_code, result_str)
+            except Exception:
+                # Fail-open: fall back to old truncation behavior
+                if len(result_str) > MAX_TOOL_RESULT_CHARS:
+                    remaining = len(result_str) - MAX_TOOL_RESULT_CHARS
+                    compressed_str = (result_str[:MAX_TOOL_RESULT_CHARS] +
+                                      f"\n...[truncated — {remaining} chars omitted]")
                 else:
-                    result_dict = {"data": result_str}
+                    compressed_str = result_str
+
+            # Structured result for timeline/UI — always full data, never truncated
+            if isinstance(tool_result, dict):
+                result_dict = tool_result
+            elif isinstance(tool_result, list):
+                result_dict = {"data": tool_result}
+            elif isinstance(tool_result, str):
+                result_dict = {"data": tool_result}
             else:
-                # Truncated: plain string so UI shows exactly what LLM gets
-                result_dict = {"data": llm_result_str}
-                # Preserve small metadata fields so tool-specific UI can still render
-                if isinstance(tool_result, dict):
-                    for _key in ('exit_code', 'execution_time'):
-                        if _key in tool_result:
-                            result_dict[_key] = tool_result[_key]
+                result_dict = {"data": result_str}
 
             has_error = isinstance(tool_result, dict) and ('error' in tool_result or tool_result.get('status') == 'error')
 
@@ -1498,15 +1609,18 @@ def run_tool_loop(agent: Dict[str, Any],
             # Record in trace (for animated bubbles)
             tool_trace.append({"tool": fn_name, "args": args, "result": result_dict})
 
-            # Save tool result message (same as LLM receives, for UI consistency)
-            db.add_chat_message(session_id, 'tool', llm_result_str, tool_call_id=_tc['id'], agent_id=db_agent_id)
+            # --- Split-path output ---
+            # DB gets FULL result_str (for detail view and future re-read)
+            db.add_chat_message(session_id, 'tool', result_str, tool_call_id=_tc['id'], agent_id=db_agent_id)
+            # Chatlog gets FULL content for tool_output display
             chatlog.append({'type': 'tool_output', 'session_id': session_id,
-                            'content': llm_result_str, 'tool_call_id': _tc['id'], 'error': has_error,
+                            'content': result_str, 'tool_call_id': _tc['id'], 'error': has_error,
                             'function': fn_name})
+            # LLM messages get COMPRESSED content (token savings)
             messages.append({
                 "role": "tool",
                 "tool_call_id": _tc['id'],
-                "content": llm_result_str
+                "content": compressed_str
             })
 
             # Sliding-window tool+args loop detection (window=10, threshold=5).
