@@ -1,205 +1,202 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>User Directory</title>
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f5f5f5; color: #333; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-  h1 { margin: 0 0 20px 0; font-size: 24px; }
-  .tabs { display: flex; gap: 4px; margin-bottom: 20px; }
-  .tab { padding: 10px 24px; cursor: pointer; background: #e0e0e0; border: none; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: 500; }
-  .tab.active { background: #fff; color: #1976d2; border-bottom: 2px solid #1976d2; }
-  .tab-content { background: #fff; border-radius: 0 8px 8px 8px; padding: 24px; min-height: 400px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-  .tab-pane { display: none; }
-  .tab-pane.active { display: block; }
-  .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
-  .search-bar input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-  .search-bar button { padding: 8px 16px; background: #1976d2; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; }
-  th { background: #fafafa; font-weight: 600; }
-  tr:hover { background: #f0f7ff; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-  .badge-green { background: #e8f5e9; color: #2e7d32; }
-  .badge-red { background: #fbe9e7; color: #c62828; }
-  .badge-orange { background: #fff3e0; color: #e65100; }
-  .badge-gray { background: #f5f5f5; color: #616161; }
-  .badge-blue { background: #e3f2fd; color: #1565c0; }
-  .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 100; }
-  .modal-content { background: #fff; margin: 5% auto; padding: 24px; width: 90%; max-width: 600px; border-radius: 8px; max-height: 80vh; overflow-y: auto; }
-  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .modal-header h2 { margin: 0; font-size: 18px; }
-  .close { font-size: 24px; cursor: pointer; color: #999; }
-  .close:hover { color: #333; }
-  .form-group { margin-bottom: 12px; }
-  .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-  .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
-  .form-group textarea { resize: vertical; min-height: 60px; }
-  .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
-  .btn-primary { background: #1976d2; color: #fff; }
-  .btn-danger { background: #d32f2f; color: #fff; }
-  .btn-outline { background: #fff; border: 1px solid #ccc; }
-  .btn-sm { padding: 4px 10px; font-size: 12px; }
-  .tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
-  .tag-item { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: #e3f2fd; border-radius: 10px; font-size: 11px; }
-  .tag-item .remove { cursor: pointer; color: #999; font-weight: bold; }
-  .tag-item .remove:hover { color: #c62828; }
-  .pagination { display: flex; gap: 4px; margin-top: 16px; justify-content: center; }
-  .pagination button { padding: 6px 12px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; }
-  .pagination button.active { background: #1976d2; color: #fff; border-color: #1976d2; }
-  .detail-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .detail-section { margin-bottom: 16px; }
-  .detail-section h3 { font-size: 14px; margin: 0 0 8px 0; border-bottom: 1px solid #eee; padding-bottom: 4px; }
-  .detail-row { display: flex; padding: 4px 0; font-size: 13px; }
-  .detail-label { width: 120px; color: #666; font-weight: 600; }
-  .detail-value { flex: 1; }
-  .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: #333; color: #fff; border-radius: 6px; font-size: 13px; z-index: 200; opacity: 0; transition: opacity 0.3s; }
-  .toast.show { opacity: 1; }
-  .toast.error { background: #c62828; }
-  .toast.success { background: #2e7d32; }
-</style>
-</head>
-<body>
-<div class="container">
-  <h1>User Directory</h1>
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('users')">Users</button>
-    <button class="tab" onclick="switchTab('groups')">Groups</button>
-    <button class="tab" onclick="switchTab('tag-rules')">Tag Rules</button>
+{% extends "base.html" %}
+{% block content %}
+
+<div class="p-4 md:p-6">
+  <!-- Page header -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+    <div>
+      <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">User Directory</h2>
+      <p class="text-sm text-gray-500 mt-1">Manage users, groups, and access control rules</p>
+    </div>
   </div>
 
-  <div class="tab-content">
+  <!-- Tab Navigation -->
+  <div class="flex border-b border-gray-200 dark:border-gray-700 mb-5">
+    <button id="tabBtnUsers" onclick="switchTab('users')"
+      class="px-5 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 -mb-px transition-colors">
+      Users
+    </button>
+    <button id="tabBtnGroups" onclick="switchTab('groups')"
+      class="px-5 py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 border-b-2 border-transparent hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+      Groups
+    </button>
+    <button id="tabBtnTagRules" onclick="switchTab('tag-rules')"
+      class="px-5 py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 border-b-2 border-transparent hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+      Tag Rules
+    </button>
+  </div>
+
     <!-- Users Tab -->
-    <div id="tab-users" class="tab-pane active">
-      <div class="search-bar">
-        <input type="text" id="user-search" placeholder="Search by name or notes..." onkeyup="searchUsers()">
-        <button onclick="showCreateUserModal()">+ New User</button>
+    <div id="tab-users">
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input type="text" id="user-search" placeholder="Search by name or notes..."
+            class="w-full sm:w-64 pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-800 dark:text-gray-100"
+            onkeyup="searchUsers()">
+        </div>
+        <button onclick="showCreateUserModal()"
+          class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          New User
+        </button>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Tags</th>
-            <th>Groups</th>
-            <th>Last Active</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="user-table-body"></tbody>
-      </table>
-      <div class="pagination" id="user-pagination"></div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 dark:bg-slate-700/50">
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ID</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Name</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Tags</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Groups</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Last Active</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="user-table-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+        </table>
+      </div>
+      <div id="user-pagination" class="flex gap-1 justify-center mt-4"></div>
     </div>
 
     <!-- Groups Tab -->
-    <div id="tab-groups" class="tab-pane">
-      <div class="search-bar">
-        <button onclick="showCreateGroupModal()">+ New Group</button>
+    <div id="tab-groups" class="hidden">
+      <div class="flex gap-3 mb-6">
+        <button onclick="showCreateGroupModal()"
+          class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          New Group
+        </button>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Description</th>
-            <th>Members</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="group-table-body"></tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 dark:bg-slate-700/50">
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ID</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Name</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Description</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Members</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="group-table-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+        </table>
+      </div>
     </div>
-  </div>
 
     <!-- Tag Rules Tab -->
-    <div id="tab-tag-rules" class="tab-pane">
-      <div class="search-bar">
-        <button onclick="showCreateTagRuleModal()">+ New Rule</button>
+    <div id="tab-tag-rules" class="hidden">
+      <div class="flex gap-3 mb-6">
+        <button onclick="showCreateTagRuleModal()"
+          class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          New Rule
+        </button>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Pattern</th>
-            <th>Effect</th>
-            <th>Priority</th>
-            <th>Config</th>
-            <th>Description</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="tag-rule-table-body"></tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 dark:bg-slate-700/50">
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Pattern</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Effect</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Priority</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Config</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Description</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tag-rule-table-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+        </table>
+      </div>
     </div>
-  </div>
+
 </div>
 
 <!-- User Detail Modal -->
-<div id="user-modal" class="modal">
-  <div class="modal-content" style="max-width: 800px;">
-    <div class="modal-header">
-      <h2 id="user-modal-title">User Detail</h2>
-      <span class="close" onclick="closeModal('user-modal')">&times;</span>
+<div id="user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/50" onclick="closeModal('user-modal')"></div>
+  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-3xl max-h-[85vh] overflow-y-auto m-4">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+      <h2 id="user-modal-title" class="text-base font-semibold text-gray-900 dark:text-gray-100">User Detail</h2>
+      <button onclick="closeModal('user-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
-    <div class="detail-panel">
-      <div class="detail-section">
-        <h3>Profile</h3>
-        <div class="detail-row"><span class="detail-label">ID</span><span class="detail-value" id="detail-id"></span></div>
-        <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value" id="detail-name"></span></div>
-        <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value" id="detail-status"></span></div>
-        <div class="detail-row"><span class="detail-label">Notes</span><span class="detail-value" id="detail-notes"></span></div>
-        <div class="detail-row"><span class="detail-label">ERP Sync</span><span class="detail-value" id="detail-erp"></span></div>
-        <div class="detail-row"><span class="detail-label">Created</span><span class="detail-value" id="detail-created"></span></div>
-        <div class="detail-row"><span class="detail-label">Last Active</span><span class="detail-value" id="detail-active"></span></div>
-        <div class="form-group" style="margin-top: 12px;">
-          <button class="btn btn-primary btn-sm" onclick="editUser()">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="blockUser()">Block</button>
-          <button class="btn btn-outline btn-sm" onclick="showHardDeleteConfirm()">Hard Delete</button>
+    <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <!-- Profile -->
+      <div>
+        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 pb-1 border-b border-gray-100 dark:border-slate-700">Profile</h3>
+        <div class="space-y-2 text-sm mb-4">
+          <div class="flex"><span class="w-28 text-gray-500 dark:text-gray-400 font-medium shrink-0">ID</span><span id="detail-id" class="text-gray-900 dark:text-gray-100 break-all font-mono text-xs"></span></div>
+          <div class="flex"><span class="w-28 text-gray-500 dark:text-gray-400 font-medium shrink-0">Name</span><span id="detail-name" class="text-gray-900 dark:text-gray-100"></span></div>
+          <div class="flex"><span class="w-28 text-gray-500 dark:text-gray-400 font-medium shrink-0">Status</span><span id="detail-status" class="text-gray-900 dark:text-gray-100"></span></div>
+          <div class="flex"><span class="w-28 text-gray-500 dark:text-gray-400 font-medium shrink-0">Notes</span><span id="detail-notes" class="text-gray-900 dark:text-gray-100"></span></div>
+          <div class="flex"><span class="w-28 text-gray-500 dark:text-gray-400 font-medium shrink-0">ERP Sync</span><span id="detail-erp" class="text-gray-900 dark:text-gray-100"></span></div>
+          <div class="flex"><span class="w-28 text-gray-500 dark:text-gray-400 font-medium shrink-0">Created</span><span id="detail-created" class="text-gray-900 dark:text-gray-100"></span></div>
+          <div class="flex"><span class="w-28 text-gray-500 dark:text-gray-400 font-medium shrink-0">Last Active</span><span id="detail-active" class="text-gray-900 dark:text-gray-100"></span></div>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <button onclick="editUser()" class="px-3 py-1.5 text-xs font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Edit</button>
+          <button onclick="blockUser()" class="px-3 py-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">Block / Unblock</button>
+          <button onclick="showHardDeleteConfirm()" class="px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors">Hard Delete</button>
         </div>
       </div>
-      <div>
-        <div class="detail-section">
-          <h3>Tags</h3>
-          <div id="detail-tags" class="tag-list"></div>
-          <div class="form-group" style="margin-top: 8px;">
-            <input type="text" id="new-tag-input" placeholder="Add tag..." style="width: auto; display: inline-block;">
-            <button class="btn btn-primary btn-sm" onclick="addTag()">Add</button>
+      <!-- Right side -->
+      <div class="space-y-5">
+        <!-- Tags -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-slate-700">Tags</h3>
+          <div id="detail-tags" class="flex flex-wrap gap-1 mb-2 min-h-[1.5rem]"></div>
+          <div class="flex gap-2">
+            <input type="text" id="new-tag-input" placeholder="Add tag..."
+              class="flex-1 border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <button onclick="addTag()" class="px-2 py-1 text-xs font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Add</button>
           </div>
         </div>
-        <div class="detail-section">
-          <h3>Contacts</h3>
-          <table id="detail-contacts-table" style="font-size: 12px;">
-            <thead><tr><th>Type</th><th>Value</th><th>Primary</th><th>Actions</th></tr></thead>
-            <tbody id="detail-contacts-body"></tbody>
+        <!-- Contacts -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-slate-700">Contacts</h3>
+          <table class="w-full text-xs mb-2">
+            <thead>
+              <tr class="bg-gray-50 dark:bg-slate-700/50">
+                <th class="px-2 py-1 text-left text-gray-500 dark:text-gray-400">Type</th>
+                <th class="px-2 py-1 text-left text-gray-500 dark:text-gray-400">Value</th>
+                <th class="px-2 py-1 text-left text-gray-500 dark:text-gray-400">Primary</th>
+                <th class="px-2 py-1 text-left text-gray-500 dark:text-gray-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="detail-contacts-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
           </table>
-          <div class="form-group" style="margin-top: 8px;">
-            <select id="new-contact-type" style="width: auto; display: inline-block;">
+          <div class="flex gap-2 flex-wrap">
+            <select id="new-contact-type"
+              class="border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
               <option value="whatsapp">WhatsApp</option>
               <option value="telegram">Telegram</option>
               <option value="email">Email</option>
             </select>
-            <input type="text" id="new-contact-value" placeholder="Value..." style="width: auto; display: inline-block;">
-            <button class="btn btn-primary btn-sm" onclick="addContact()">Add</button>
+            <input type="text" id="new-contact-value" placeholder="Value..."
+              class="flex-1 min-w-0 border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <button onclick="addContact()" class="px-2 py-1 text-xs font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Add</button>
           </div>
         </div>
-        <div class="detail-section">
-          <h3>Audit Log</h3>
-          <div id="detail-audit" style="max-height: 150px; overflow-y: auto; font-size: 12px;"></div>
+        <!-- Audit Log -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-slate-700">Audit Log</h3>
+          <div id="detail-audit" class="max-h-36 overflow-y-auto text-xs space-y-0.5"></div>
         </div>
-        <div class="detail-section">
-          <h3>Access Control</h3>
-          <div id="detail-access-info" style="font-size: 12px; max-height: 150px; overflow-y: auto;">
-            Click "Check Access" to evaluate
-          </div>
-          <button class="btn btn-outline btn-sm" onclick="checkAccessControl()" style="margin-top:4px;">Check Access</button>
+        <!-- Access Control -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 pb-1 border-b border-gray-100 dark:border-slate-700">Access Control</h3>
+          <div id="detail-access-info" class="text-xs max-h-36 overflow-y-auto text-gray-500 dark:text-gray-400 mb-2">Click "Check Access" to evaluate</div>
+          <button onclick="checkAccessControl()"
+            class="px-2 py-1 text-xs font-medium border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors">
+            Check Access
+          </button>
         </div>
-        <div class="detail-section">
-          <h3>Danger Zone</h3>
-          <button class="btn btn-danger btn-sm" onclick="mergeUser()">Merge Into Another User</button>
+        <!-- Danger Zone -->
+        <div>
+          <h3 class="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2 pb-1 border-b border-red-100 dark:border-red-900/30">Danger Zone</h3>
+          <button onclick="mergeUser()" class="px-3 py-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">Merge Into Another User</button>
         </div>
       </div>
     </div>
@@ -207,110 +204,167 @@
 </div>
 
 <!-- Edit User Modal -->
-<div id="edit-user-modal" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>Edit User</h2>
-      <span class="close" onclick="closeModal('edit-user-modal')">&times;</span>
+<div id="edit-user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/50" onclick="closeModal('edit-user-modal')"></div>
+  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-md m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Edit User</h2>
+      <button onclick="closeModal('edit-user-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
-    <div class="form-group"><label>Name</label><input type="text" id="edit-name"></div>
-    <div class="form-group"><label>Notes</label><textarea id="edit-notes"></textarea></div>
-    <div class="form-group"><label>ERP Sync Enabled</label><select id="edit-erp"><option value="1">Yes</option><option value="0">No</option></select></div>
-    <button class="btn btn-primary" onclick="saveEditUser()">Save</button>
+    <div class="p-5 space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+        <input type="text" id="edit-name" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+        <textarea id="edit-notes" rows="3" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ERP Sync Enabled</label>
+        <select id="edit-erp" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="1">Yes</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+      <button onclick="saveEditUser()" class="px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Save</button>
+    </div>
   </div>
 </div>
 
 <!-- Create User Modal -->
-<div id="create-user-modal" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>Create User</h2>
-      <span class="close" onclick="closeModal('create-user-modal')">&times;</span>
+<div id="create-user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/50" onclick="closeModal('create-user-modal')"></div>
+  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-md m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Create User</h2>
+      <button onclick="closeModal('create-user-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
-    <div class="form-group"><label>Name</label><input type="text" id="create-name"></div>
-    <div class="form-group"><label>Notes</label><textarea id="create-notes"></textarea></div>
-    <button class="btn btn-primary" onclick="createUser()">Create</button>
+    <div class="p-5 space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+        <input type="text" id="create-name" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+        <textarea id="create-notes" rows="3" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
+      </div>
+      <button onclick="createUser()" class="px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Create</button>
+    </div>
   </div>
 </div>
 
 <!-- Create Group Modal -->
-<div id="create-group-modal" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>Create Group</h2>
-      <span class="close" onclick="closeModal('create-group-modal')">&times;</span>
+<div id="create-group-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/50" onclick="closeModal('create-group-modal')"></div>
+  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-md m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Create Group</h2>
+      <button onclick="closeModal('create-group-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
-    <div class="form-group"><label>Name</label><input type="text" id="create-group-name"></div>
-    <div class="form-group"><label>Description</label><textarea id="create-group-desc"></textarea></div>
-    <button class="btn btn-primary" onclick="createGroup()">Create</button>
+    <div class="p-5 space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+        <input type="text" id="create-group-name" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+        <textarea id="create-group-desc" rows="3" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
+      </div>
+      <button onclick="createGroup()" class="px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Create</button>
+    </div>
   </div>
 </div>
 
-<!-- Hard Delete Confirm -->
-<div id="hard-delete-modal" class="modal">
-  <div class="modal-content" style="max-width: 400px;">
-    <div class="modal-header">
-      <h2>Confirm Hard Delete</h2>
-      <span class="close" onclick="closeModal('hard-delete-modal')">&times;</span>
+<!-- Hard Delete Confirm Modal -->
+<div id="hard-delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/50" onclick="closeModal('hard-delete-modal')"></div>
+  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-sm m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Confirm Hard Delete</h2>
+      <button onclick="closeModal('hard-delete-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
-    <p style="color: #c62828;">This will permanently pseudonymize this user (GDPR). Cannot be undone.</p>
-    <button class="btn btn-danger" onclick="hardDeleteUser()">Confirm Hard Delete</button>
+    <div class="p-5">
+      <p class="text-sm text-red-600 dark:text-red-400 mb-4">This will permanently pseudonymize this user (GDPR). Cannot be undone.</p>
+      <button onclick="hardDeleteUser()" class="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">Confirm Hard Delete</button>
+    </div>
   </div>
 </div>
 
 <!-- Merge User Modal -->
-<div id="merge-user-modal" class="modal">
-  <div class="modal-content" style="max-width: 400px;">
-    <div class="modal-header">
-      <h2>Merge User</h2>
-      <span class="close" onclick="closeModal('merge-user-modal')">&times;</span>
+<div id="merge-user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/50" onclick="closeModal('merge-user-modal')"></div>
+  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-sm m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Merge User</h2>
+      <button onclick="closeModal('merge-user-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
-    <div class="form-group"><label>Target User ID</label><input type="text" id="merge-target-id"></div>
-    <p style="font-size: 12px; color: #666;">This user will be merged INTO the target. Source will be soft-deleted.</p>
-    <button class="btn btn-danger" onclick="confirmMergeUser()">Merge</button>
+    <div class="p-5 space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Target User ID</label>
+        <input type="text" id="merge-target-id" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400">This user will be merged INTO the target. Source will be soft-deleted.</p>
+      <button onclick="confirmMergeUser()" class="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">Merge</button>
+    </div>
   </div>
 </div>
 
 <!-- Create/Edit Tag Rule Modal -->
-<div id="tag-rule-modal" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2 id="tag-rule-modal-title">Create Tag Rule</h2>
-      <span class="close" onclick="closeModal('tag-rule-modal')">&times;</span>
+<div id="tag-rule-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/50" onclick="closeModal('tag-rule-modal')"></div>
+  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-md m-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+      <h2 id="tag-rule-modal-title" class="text-base font-semibold text-gray-900 dark:text-gray-100">Create Tag Rule</h2>
+      <button onclick="closeModal('tag-rule-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
-    <div class="form-group"><label>Rule ID</label><input type="text" id="tr-id" placeholder="e.g. custom_vip_allow"></div>
-    <div class="form-group"><label>Tag Pattern</label><input type="text" id="tr-pattern" placeholder="e.g. vip, agent:*, role:admin"></div>
-    <div class="form-group"><label>Effect</label>
-      <select id="tr-effect">
-        <option value="allow_all">allow_all</option>
-        <option value="deny">deny</option>
-        <option value="require_role">require_role</option>
-        <option value="match_agent">match_agent</option>
-        <option value="role_tag">role_tag</option>
-      </select>
+    <div class="p-5 space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Rule ID</label>
+        <input type="text" id="tr-id" placeholder="e.g. custom_vip_allow" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Tag Pattern</label>
+        <input type="text" id="tr-pattern" placeholder="e.g. vip, agent:*, role:admin" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Effect</label>
+        <select id="tr-effect" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="allow_all">allow_all</option>
+          <option value="deny">deny</option>
+          <option value="require_role">require_role</option>
+          <option value="match_agent">match_agent</option>
+          <option value="role_tag">role_tag</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Priority (higher = evaluated first)</label>
+        <input type="number" id="tr-priority" value="5" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div id="tr-config-group" class="hidden">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Config (JSON, e.g. {"roles": ["admin"]})</label>
+        <textarea id="tr-config" rows="3" placeholder='{"roles": ["admin"]}' class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+        <input type="text" id="tr-desc" placeholder="What this rule does" class="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <button onclick="saveTagRule()" class="px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors">Save</button>
     </div>
-    <div class="form-group"><label>Priority (higher = evaluated first)</label><input type="number" id="tr-priority" value="5"></div>
-    <div class="form-group" id="tr-config-group" style="display:none;">
-      <label>Config (JSON, e.g. {"roles": ["admin"]})</label>
-      <textarea id="tr-config" placeholder='{"roles": ["admin"]}'></textarea>
-    </div>
-    <div class="form-group"><label>Description</label><input type="text" id="tr-desc" placeholder="What this rule does"></div>
-    <button class="btn btn-primary" onclick="saveTagRule()">Save</button>
   </div>
 </div>
 
 <!-- Group Detail Modal -->
-<div id="group-modal" class="modal">
-  <div class="modal-content" style="max-width: 600px;">
-    <div class="modal-header">
-      <h2 id="group-modal-title">Group Detail</h2>
-      <span class="close" onclick="closeModal('group-modal')">&times;</span>
+<div id="group-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/50" onclick="closeModal('group-modal')"></div>
+  <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-[95%] max-w-lg m-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+      <h2 id="group-modal-title" class="text-base font-semibold text-gray-900 dark:text-gray-100">Group Detail</h2>
+      <button onclick="closeModal('group-modal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
     </div>
-    <div id="group-detail-content"></div>
+    <div id="group-detail-content" class="p-5 text-sm text-gray-700 dark:text-gray-300"></div>
   </div>
 </div>
-
-<div id="toast" class="toast"></div>
 
 <script>
 let currentUserId = null;
@@ -318,32 +372,61 @@ let currentGroupId = null;
 let usersOffset = 0;
 const USERS_LIMIT = 20;
 
-function toast(msg, type='info') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show ' + (type === 'error' ? 'error' : type === 'success' ? 'success' : '');
-  setTimeout(() => t.className = 'toast', 3000);
+// Badge helpers
+function badge(color) {
+  const map = {
+    green:  'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    red:    'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    orange: 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+    gray:   'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300',
+    blue:   'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+  };
+  return map[color] || map.gray;
 }
+const btnSm = 'px-2 py-1 text-xs font-medium border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors';
+const btnDanger = 'px-2 py-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors';
+
+const TAB_BTN_ACTIVE   = 'px-5 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 -mb-px transition-colors';
+const TAB_BTN_INACTIVE = 'px-5 py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 border-b-2 border-transparent hover:text-gray-700 dark:hover:text-gray-300 transition-colors';
 
 function switchTab(name) {
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  document.querySelector(`.tab[onclick*="${name}"]`).classList.add('active');
-  if (name === 'groups') loadGroups();
-  else loadUsers();
+  const tabUsers    = document.getElementById('tab-users');
+  const tabGroups   = document.getElementById('tab-groups');
+  const tabTagRules = document.getElementById('tab-tag-rules');
+  const btnUsers    = document.getElementById('tabBtnUsers');
+  const btnGroups   = document.getElementById('tabBtnGroups');
+  const btnTagRules = document.getElementById('tabBtnTagRules');
+
+  tabUsers.classList.add('hidden');
+  tabGroups.classList.add('hidden');
+  tabTagRules.classList.add('hidden');
+  btnUsers.className = TAB_BTN_INACTIVE;
+  btnGroups.className = TAB_BTN_INACTIVE;
+  btnTagRules.className = TAB_BTN_INACTIVE;
+
+  if (name === 'users') {
+    tabUsers.classList.remove('hidden');
+    btnUsers.className = TAB_BTN_ACTIVE;
+    loadUsers();
+  } else if (name === 'groups') {
+    tabGroups.classList.remove('hidden');
+    btnGroups.className = TAB_BTN_ACTIVE;
+    loadGroups();
+  } else {
+    tabTagRules.classList.remove('hidden');
+    btnTagRules.className = TAB_BTN_ACTIVE;
+    loadTagRules();
+  }
 }
 
 function closeModal(id) {
-  document.getElementById(id).style.display = 'none';
-  if (id === 'tag-rule-modal') {
-    document.getElementById('tr-id').disabled = false;
-  }
+  document.getElementById(id).classList.add('hidden');
+  if (id === 'tag-rule-modal') document.getElementById('tr-id').disabled = false;
 }
-function showModal(id) { document.getElementById(id).style.display = 'block'; }
+function showModal(id) { document.getElementById(id).classList.remove('hidden'); }
 
-async function api(method, path, body=null) {
-  const opts = { method, headers: {'Content-Type': 'application/json'} };
+async function api(method, path, body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body !== null) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   const data = await res.json();
@@ -352,7 +435,6 @@ async function api(method, path, body=null) {
 }
 
 // ---- Users ----
-
 let searchTimer = null;
 function searchUsers() {
   clearTimeout(searchTimer);
@@ -367,15 +449,22 @@ async function loadUsers() {
     const tbody = document.getElementById('user-table-body');
     tbody.innerHTML = '';
     data.users.forEach(u => {
-      const status = u.is_approved === 2 ? 'Blocked' : u.is_approved === 1 ? 'Approved' : 'Pending';
-      const sClass = u.is_approved === 2 ? 'badge-red' : u.is_approved === 1 ? 'badge-green' : 'badge-orange';
+      const statusLabel = u.is_approved === 2 ? 'Blocked' : u.is_approved === 1 ? 'Approved' : 'Pending';
+      const statusColor = u.is_approved === 2 ? 'red' : u.is_approved === 1 ? 'green' : 'orange';
       const tr = document.createElement('tr');
-      tr.style.cursor = 'pointer';
+      tr.className = 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50';
       tr.onclick = () => showUserDetail(u.id);
-      tr.innerHTML = `<td>${u.id}</td><td>${u.name}</td><td><span class="badge ${sClass}">${status}</span></td><td><div class="tag-list">${(u.tags || []).map(t => `<span class="badge badge-blue">${t}</span>`).join('')}</div></td><td>${u.group_count || 0}</td><td>${u.last_active_at ? new Date(u.last_active_at).toLocaleString() : '-'}</td><td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();showUserDetail('${u.id}')">View</button></td>`;
+      tr.innerHTML = `
+        <td class="px-3 py-2 text-gray-900 dark:text-gray-100 font-mono text-xs">${u.id}</td>
+        <td class="px-3 py-2 text-gray-900 dark:text-gray-100 font-medium">${u.name}</td>
+        <td class="px-3 py-2"><span class="${badge(statusColor)}">${statusLabel}</span></td>
+        <td class="px-3 py-2"><div class="flex flex-wrap gap-1">${(u.tags || []).map(t => `<span class="${badge('blue')}">${t}</span>`).join('')}</div></td>
+        <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${u.group_count || 0}</td>
+        <td class="px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">${u.last_active_at ? new Date(u.last_active_at).toLocaleString() : '-'}</td>
+        <td class="px-3 py-2"><button class="${btnSm}" onclick="event.stopPropagation();showUserDetail('${u.id}')">View</button></td>`;
       tbody.appendChild(tr);
     });
-  } catch(e) { toast(e.message, 'error'); }
+  } catch (e) { toast.error(e.message); }
 }
 
 async function showUserDetail(id) {
@@ -385,30 +474,26 @@ async function showUserDetail(id) {
     const u = data.user;
     document.getElementById('detail-id').textContent = u.id;
     document.getElementById('detail-name').textContent = u.name;
-    const status = u.is_approved === 2 ? 'Blocked' : u.is_approved === 1 ? 'Approved' : 'Pending';
-    document.getElementById('detail-status').textContent = status;
+    document.getElementById('detail-status').textContent = u.is_approved === 2 ? 'Blocked' : u.is_approved === 1 ? 'Approved' : 'Pending';
     document.getElementById('detail-notes').textContent = u.notes || '-';
     document.getElementById('detail-erp').textContent = u.erp_sync_enabled ? 'Enabled' : 'Disabled';
     document.getElementById('detail-created').textContent = u.created_at ? new Date(u.created_at).toLocaleString() : '-';
     document.getElementById('detail-active').textContent = u.last_active_at ? new Date(u.last_active_at).toLocaleString() : '-';
     document.getElementById('user-modal-title').textContent = `User: ${u.name}`;
     showModal('user-modal');
-
-    // Load tags
     loadUserTags(id);
-    // Load contacts
     loadUserContacts(id);
-    // Load audit
     loadUserAudit(id);
-  } catch(e) { toast(e.message, 'error'); }
+  } catch (e) { toast.error(e.message); }
 }
 
 async function loadUserTags(id) {
   try {
     const data = await api('GET', `/api/user-directory/users/${id}/tags`);
-    const container = document.getElementById('detail-tags');
-    container.innerHTML = data.tags.map(t => `<span class="tag-item">${t} <span class="remove" onclick="removeTag('${t}')">&times;</span></span>`).join('');
-  } catch(e) { /* ignore */ }
+    document.getElementById('detail-tags').innerHTML = data.tags.map(t =>
+      `<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full text-xs">${t} <span class="cursor-pointer hover:text-red-600 font-bold leading-none" onclick="removeTag('${t}')">&times;</span></span>`
+    ).join('');
+  } catch (e) { /* ignore */ }
 }
 
 async function addTag() {
@@ -416,18 +501,18 @@ async function addTag() {
   const tag = input.value.trim();
   if (!tag) return;
   try {
-    await api('POST', `/api/user-directory/users/${currentUserId}/tags`, {tag});
+    await api('POST', `/api/user-directory/users/${currentUserId}/tags`, { tag });
     input.value = '';
     loadUserTags(currentUserId);
-    toast('Tag added', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('Tag added');
+  } catch (e) { toast.error(e.message); }
 }
 
 async function removeTag(tag) {
   try {
     await api('DELETE', `/api/user-directory/users/${currentUserId}/tags/${encodeURIComponent(tag)}`);
     loadUserTags(currentUserId);
-  } catch(e) { toast(e.message, 'error'); }
+  } catch (e) { toast.error(e.message); }
 }
 
 async function loadUserContacts(id) {
@@ -437,10 +522,10 @@ async function loadUserContacts(id) {
     tbody.innerHTML = '';
     data.contacts.forEach(c => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${c.channel_type}</td><td>${c.value}</td><td>${c.is_primary ? 'Y' : '-'}</td><td><button class="btn btn-outline btn-sm" onclick="setPrimary(${c.id})">Set Primary</button> <button class="btn btn-outline btn-sm" onclick="deleteContact(${c.id})">Delete</button></td>`;
+      tr.innerHTML = `<td class="px-2 py-1 text-gray-700 dark:text-gray-300">${c.channel_type}</td><td class="px-2 py-1 text-gray-700 dark:text-gray-300">${c.value}</td><td class="px-2 py-1 text-gray-500 dark:text-gray-400">${c.is_primary ? 'Y' : '-'}</td><td class="px-2 py-1 flex gap-1"><button class="${btnSm}" onclick="setPrimary(${c.id})">Primary</button><button class="${btnSm}" onclick="deleteContact(${c.id})">Del</button></td>`;
       tbody.appendChild(tr);
     });
-  } catch(e) { /* ignore */ }
+  } catch (e) { /* ignore */ }
 }
 
 async function addContact() {
@@ -448,69 +533,70 @@ async function addContact() {
   const value = document.getElementById('new-contact-value').value.trim();
   if (!value) return;
   try {
-    await api('POST', `/api/user-directory/users/${currentUserId}/contacts`, {channel_type: type, external_user_id: value, value});
+    await api('POST', `/api/user-directory/users/${currentUserId}/contacts`, { channel_type: type, external_user_id: value, value });
     document.getElementById('new-contact-value').value = '';
     loadUserContacts(currentUserId);
-    toast('Contact added', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('Contact added');
+  } catch (e) { toast.error(e.message); }
 }
 
 async function setPrimary(contactId) {
   try {
     await api('POST', `/api/user-directory/users/${currentUserId}/contacts/${contactId}/primary`);
     loadUserContacts(currentUserId);
-    toast('Primary set', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('Primary set');
+  } catch (e) { toast.error(e.message); }
 }
 
 async function deleteContact(contactId) {
   try {
     await api('DELETE', `/api/user-directory/users/${currentUserId}/contacts/${contactId}`);
     loadUserContacts(currentUserId);
-    toast('Contact deleted', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('Contact deleted');
+  } catch (e) { toast.error(e.message); }
 }
 
 async function loadUserAudit(id) {
   try {
     const data = await api('GET', `/api/user-directory/users/${id}/audit`);
-    const container = document.getElementById('detail-audit');
-    container.innerHTML = data.logs.slice(0, 20).map(l => `<div style="padding: 2px 0; border-bottom: 1px solid #f0f0f0;">${l.created_at || ''} <strong>${l.action}</strong> ${l.details ? JSON.stringify(l.details) : ''}</div>`).join('');
-  } catch(e) { /* ignore */ }
+    document.getElementById('detail-audit').innerHTML = data.logs.slice(0, 20).map(l =>
+      `<div class="py-0.5 border-b border-gray-100 dark:border-slate-700 text-gray-600 dark:text-gray-400">${l.created_at || ''} <strong class="text-gray-800 dark:text-gray-200">${l.action}</strong> ${l.details ? JSON.stringify(l.details) : ''}</div>`
+    ).join('');
+  } catch (e) { /* ignore */ }
 }
 
 function editUser() {
   closeModal('user-modal');
   document.getElementById('edit-name').value = document.getElementById('detail-name').textContent;
-  document.getElementById('edit-notes').value = document.getElementById('detail-notes').textContent === '-' ? '' : document.getElementById('detail-notes').textContent;
+  const notes = document.getElementById('detail-notes').textContent;
+  document.getElementById('edit-notes').value = notes === '-' ? '' : notes;
   document.getElementById('edit-erp').value = document.getElementById('detail-erp').textContent === 'Enabled' ? '1' : '0';
   showModal('edit-user-modal');
 }
 
 async function saveEditUser() {
-  const updates = {
-    name: document.getElementById('edit-name').value,
-    notes: document.getElementById('edit-notes').value,
-    erp_sync_enabled: parseInt(document.getElementById('edit-erp').value),
-  };
   try {
-    await api('PUT', `/api/user-directory/users/${currentUserId}`, updates);
+    await api('PUT', `/api/user-directory/users/${currentUserId}`, {
+      name: document.getElementById('edit-name').value,
+      notes: document.getElementById('edit-notes').value,
+      erp_sync_enabled: parseInt(document.getElementById('edit-erp').value),
+    });
     closeModal('edit-user-modal');
     showUserDetail(currentUserId);
     loadUsers();
-    toast('User updated', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('User updated');
+  } catch (e) { toast.error(e.message); }
 }
 
 async function blockUser() {
   try {
     const user = await api('GET', `/api/user-directory/users/${currentUserId}`);
     const isBlocked = user.user.is_approved === 2;
-    await api('POST', `/api/user-directory/users/${currentUserId}/block`, {blocked: !isBlocked});
+    await api('POST', `/api/user-directory/users/${currentUserId}/block`, { blocked: !isBlocked });
     showUserDetail(currentUserId);
     loadUsers();
-    toast(isBlocked ? 'User unblocked' : 'User blocked', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success(isBlocked ? 'User unblocked' : 'User blocked');
+  } catch (e) { toast.error(e.message); }
 }
 
 function showHardDeleteConfirm() {
@@ -524,8 +610,8 @@ async function hardDeleteUser() {
     closeModal('hard-delete-modal');
     currentUserId = null;
     loadUsers();
-    toast('User hard deleted (pseudonymized)', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('User hard deleted (pseudonymized)');
+  } catch (e) { toast.error(e.message); }
 }
 
 function mergeUser() {
@@ -535,32 +621,32 @@ function mergeUser() {
 
 async function confirmMergeUser() {
   const target = document.getElementById('merge-target-id').value.trim();
-  if (!target) { toast('Target ID required', 'error'); return; }
+  if (!target) { toast.error('Target ID required'); return; }
   try {
-    await api('POST', `/api/user-directory/users/merge`, {source_id: currentUserId, target_id: target});
+    await api('POST', `/api/user-directory/users/merge`, { source_id: currentUserId, target_id: target });
     closeModal('merge-user-modal');
     currentUserId = null;
     loadUsers();
-    toast('Users merged', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('Users merged');
+  } catch (e) { toast.error(e.message); }
 }
 
 function showCreateUserModal() { showModal('create-user-modal'); }
+
 async function createUser() {
   const name = document.getElementById('create-name').value.trim();
-  if (!name) { toast('Name required', 'error'); return; }
+  if (!name) { toast.error('Name required'); return; }
   try {
-    await api('POST', '/api/user-directory/users', {name, notes: document.getElementById('create-notes').value});
+    await api('POST', '/api/user-directory/users', { name, notes: document.getElementById('create-notes').value });
     document.getElementById('create-name').value = '';
     document.getElementById('create-notes').value = '';
     closeModal('create-user-modal');
     loadUsers();
-    toast('User created', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('User created');
+  } catch (e) { toast.error(e.message); }
 }
 
 // ---- Groups ----
-
 async function loadGroups() {
   try {
     const data = await api('GET', '/api/user-directory/groups');
@@ -568,10 +654,11 @@ async function loadGroups() {
     tbody.innerHTML = '';
     data.groups.forEach(g => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${g.id}</td><td>${g.name}</td><td>${g.description || '-'}</td><td>${g.member_count || 0}</td><td><button class="btn btn-outline btn-sm" onclick="showGroupDetail('${g.id}')">Manage</button> <button class="btn btn-outline btn-sm" onclick="deleteGroup('${g.id}')">Delete</button></td>`;
+      tr.className = 'hover:bg-gray-50 dark:hover:bg-slate-700/50';
+      tr.innerHTML = `<td class="px-3 py-2 text-gray-900 dark:text-gray-100 font-mono text-xs">${g.id}</td><td class="px-3 py-2 text-gray-900 dark:text-gray-100 font-medium">${g.name}</td><td class="px-3 py-2 text-gray-500 dark:text-gray-400">${g.description || '-'}</td><td class="px-3 py-2 text-gray-600 dark:text-gray-400">${g.member_count || 0}</td><td class="px-3 py-2 flex gap-1"><button class="${btnSm}" onclick="showGroupDetail('${g.id}')">Manage</button><button class="${btnSm}" onclick="deleteGroup('${g.id}')">Delete</button></td>`;
       tbody.appendChild(tr);
     });
-  } catch(e) { toast(e.message, 'error'); }
+  } catch (e) { toast.error(e.message); }
 }
 
 async function showGroupDetail(id) {
@@ -582,44 +669,43 @@ async function showGroupDetail(id) {
     const [users, agents] = g.members || [[], []];
     document.getElementById('group-modal-title').textContent = `Group: ${g.name}`;
     document.getElementById('group-detail-content').innerHTML = `
-      <p><strong>ID:</strong> ${g.id}</p>
-      <p><strong>Name:</strong> ${g.name}</p>
-      <p><strong>Description:</strong> ${g.description || '-'}</p>
-      <h3 style="font-size:14px;margin:12px 0 8px;">Users (${users.length})</h3>
-      <div>${users.map(u => `<span class="badge badge-blue">${u.name || u.member_id}</span> `).join('')}</div>
-      <h3 style="font-size:14px;margin:12px 0 8px;">Agents (${agents.length})</h3>
-      <div>${agents.map(a => `<span class="badge badge-green">${a.name || a.member_id}</span> `).join('')}</div>
-    `;
+      <p class="mb-1"><span class="text-gray-500 dark:text-gray-400 font-medium">ID:</span> <span class="font-mono text-xs">${g.id}</span></p>
+      <p class="mb-1"><span class="text-gray-500 dark:text-gray-400 font-medium">Name:</span> ${g.name}</p>
+      <p class="mb-4"><span class="text-gray-500 dark:text-gray-400 font-medium">Description:</span> ${g.description || '-'}</p>
+      <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Users (${users.length})</p>
+      <div class="flex flex-wrap gap-1 mb-4">${users.map(u => `<span class="${badge('blue')}">${u.name || u.member_id}</span>`).join('')}</div>
+      <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Agents (${agents.length})</p>
+      <div class="flex flex-wrap gap-1">${agents.map(a => `<span class="${badge('green')}">${a.name || a.member_id}</span>`).join('')}</div>`;
     showModal('group-modal');
-  } catch(e) { toast(e.message, 'error'); }
+  } catch (e) { toast.error(e.message); }
 }
 
 function showCreateGroupModal() { showModal('create-group-modal'); }
 
 async function createGroup() {
   const name = document.getElementById('create-group-name').value.trim();
-  if (!name) { toast('Name required', 'error'); return; }
+  if (!name) { toast.error('Name required'); return; }
   try {
-    await api('POST', '/api/user-directory/groups', {name, description: document.getElementById('create-group-desc').value});
+    await api('POST', '/api/user-directory/groups', { name, description: document.getElementById('create-group-desc').value });
     document.getElementById('create-group-name').value = '';
     document.getElementById('create-group-desc').value = '';
     closeModal('create-group-modal');
     loadGroups();
-    toast('Group created', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('Group created');
+  } catch (e) { toast.error(e.message); }
 }
 
 async function deleteGroup(id) {
-  if (!confirm('Delete this group?')) return;
+  const ok = await ui.confirm({ title: 'Delete Group', message: 'Delete this group?', confirmText: 'Delete' });
+  if (!ok) return;
   try {
     await api('DELETE', `/api/user-directory/groups/${id}`);
     loadGroups();
-    toast('Group deleted', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('Group deleted');
+  } catch (e) { toast.error(e.message); }
 }
 
 // ---- Tag Rules ----
-
 let editingTagRuleId = null;
 
 async function loadTagRules() {
@@ -628,24 +714,29 @@ async function loadTagRules() {
     const tbody = document.getElementById('tag-rule-table-body');
     tbody.innerHTML = '';
     data.rules.forEach(r => {
-      const eClass = r.effect === 'allow_all' ? 'badge-green' : r.effect === 'deny' ? 'badge-red' : r.effect === 'require_role' ? 'badge-orange' : r.effect === 'match_agent' ? 'badge-blue' : 'badge-gray';
+      const eColor = r.effect === 'allow_all' ? 'green' : r.effect === 'deny' ? 'red' : r.effect === 'require_role' ? 'orange' : r.effect === 'match_agent' ? 'blue' : 'gray';
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td><code>${r.tag_pattern}</code></td><td><span class="badge ${eClass}">${r.effect}</span></td><td>${r.priority}</td><td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;">${r.config !== '{}' ? r.config : '-'}</td><td>${r.description || '-'}</td><td><span class="badge ${r.enabled ? 'badge-green' : 'badge-red'}">${r.enabled ? 'ON' : 'OFF'}</span></td><td><button class="btn btn-outline btn-sm" onclick="editTagRule('${r.id}')">Edit</button> <button class="btn btn-outline btn-sm" onclick="toggleTagRule('${r.id}')">${r.enabled ? 'Disable' : 'Enable'}</button> <button class="btn btn-danger btn-sm" onclick="deleteTagRule('${r.id}')">Del</button></td>`;
+      tr.className = 'hover:bg-gray-50 dark:hover:bg-slate-700/50';
+      tr.innerHTML = `
+        <td class="px-3 py-2"><code class="bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded text-xs">${r.tag_pattern}</code></td>
+        <td class="px-3 py-2"><span class="${badge(eColor)}">${r.effect}</span></td>
+        <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${r.priority}</td>
+        <td class="px-3 py-2 text-gray-500 dark:text-gray-400 text-xs max-w-[120px] truncate">${r.config !== '{}' ? r.config : '-'}</td>
+        <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${r.description || '-'}</td>
+        <td class="px-3 py-2"><span class="${badge(r.enabled ? 'green' : 'red')}">${r.enabled ? 'ON' : 'OFF'}</span></td>
+        <td class="px-3 py-2"><div class="flex gap-1"><button class="${btnSm}" onclick="editTagRule('${r.id}')">Edit</button><button class="${btnSm}" onclick="toggleTagRule('${r.id}')">${r.enabled ? 'Disable' : 'Enable'}</button><button class="${btnDanger}" onclick="deleteTagRule('${r.id}')">Del</button></div></td>`;
       tbody.appendChild(tr);
     });
-  } catch(e) { toast('Failed to load rules: ' + e.message, 'error'); }
+  } catch (e) { toast.error('Failed to load rules: ' + e.message); }
 }
 
 function showCreateTagRuleModal() {
   editingTagRuleId = null;
   document.getElementById('tag-rule-modal-title').textContent = 'Create Tag Rule';
-  document.getElementById('tr-id').value = '';
-  document.getElementById('tr-pattern').value = '';
+  ['tr-id', 'tr-pattern', 'tr-config', 'tr-desc'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('tr-effect').value = 'allow_all';
   document.getElementById('tr-priority').value = '5';
-  document.getElementById('tr-config').value = '';
-  document.getElementById('tr-desc').value = '';
-  document.getElementById('tr-config-group').style.display = 'none';
+  document.getElementById('tr-config-group').classList.add('hidden');
   showModal('tag-rule-modal');
 }
 
@@ -662,10 +753,9 @@ async function editTagRule(id) {
     document.getElementById('tr-config').value = r.config || '';
     document.getElementById('tr-desc').value = r.description || '';
     document.getElementById('tr-id').disabled = true;
-    // Show config field for require_role
-    document.getElementById('tr-config-group').style.display = r.effect === 'require_role' ? 'block' : 'none';
+    document.getElementById('tr-config-group').classList.toggle('hidden', r.effect !== 'require_role');
     showModal('tag-rule-modal');
-  } catch(e) { toast(e.message, 'error'); }
+  } catch (e) { toast.error(e.message); }
 }
 
 async function saveTagRule() {
@@ -675,82 +765,66 @@ async function saveTagRule() {
   const priority = parseInt(document.getElementById('tr-priority').value) || 5;
   const configStr = document.getElementById('tr-config').value.trim();
   const description = document.getElementById('tr-desc').value.trim();
-  if (!id || !pattern || !effect) {
-    toast('ID, pattern, and effect are required', 'error');
-    return;
-  }
+  if (!id || !pattern || !effect) { toast.error('ID, pattern, and effect are required'); return; }
   let config = {};
   if (configStr) {
-    try { config = JSON.parse(configStr); } catch(e) { toast('Invalid JSON in config', 'error'); return; }
+    try { config = JSON.parse(configStr); } catch (e) { toast.error('Invalid JSON in config'); return; }
   }
   try {
     if (editingTagRuleId) {
-      const updates = { tag_pattern: pattern, effect, priority, config, description };
-      await api('PUT', `/api/user-directory/tag-rules/${editingTagRuleId}`, updates);
-      toast('Rule updated', 'success');
+      await api('PUT', `/api/user-directory/tag-rules/${editingTagRuleId}`, { tag_pattern: pattern, effect, priority, config, description });
+      toast.success('Rule updated');
     } else {
       await api('POST', '/api/user-directory/tag-rules', { id, tag_pattern: pattern, effect, priority, config, description });
-      toast('Rule created', 'success');
+      toast.success('Rule created');
     }
     closeModal('tag-rule-modal');
     loadTagRules();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch (e) { toast.error(e.message); }
 }
 
 async function toggleTagRule(id) {
   try {
     const data = await api('PUT', `/api/user-directory/tag-rules/${id}/toggle`);
-    toast(data.enabled ? 'Rule enabled' : 'Rule disabled', 'success');
+    toast.success(data.enabled ? 'Rule enabled' : 'Rule disabled');
     loadTagRules();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch (e) { toast.error(e.message); }
 }
 
 async function deleteTagRule(id) {
-  if (!confirm('Delete this tag rule?')) return;
+  const ok = await ui.confirm({ title: 'Delete Rule', message: 'Delete this tag rule?', confirmText: 'Delete' });
+  if (!ok) return;
   try {
     await api('DELETE', `/api/user-directory/tag-rules/${id}`);
     loadTagRules();
-    toast('Rule deleted', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    toast.success('Rule deleted');
+  } catch (e) { toast.error(e.message); }
 }
 
-// Show config field when effect changes
-document.addEventListener('change', function(e) {
+document.addEventListener('change', function (e) {
   if (e.target && e.target.id === 'tr-effect') {
-    document.getElementById('tr-config-group').style.display = e.target.value === 'require_role' ? 'block' : 'none';
+    document.getElementById('tr-config-group').classList.toggle('hidden', e.target.value !== 'require_role');
   }
 });
 
-// ---- Access Control Check ----
-
+// ---- Access Control ----
 async function checkAccessControl() {
   if (!currentUserId) return;
   try {
     const data = await api('POST', '/api/user-directory/check-access', { user_id: currentUserId });
     const info = data.access_info;
     const container = document.getElementById('detail-access-info');
-    let html = `<div style="margin-bottom:4px;"><strong>Can communicate:</strong> <span class="badge ${info.can_communicate ? 'badge-green' : 'badge-red'}">${info.can_communicate ? 'YES' : 'NO'}</span></div>`;
-    html += '<div><strong>Reasons:</strong></div>';
-    html += '<ul style="margin:2px 0 0 16px;padding:0;">';
-    (info.reasons || []).forEach(r => {
-      html += `<li style="margin:1px 0;font-size:11px;">${r}</li>`;
-    });
-    html += '</ul>';
-    html += `<div style="margin-top:4px;"><strong>Tags:</strong> ${(info.user_tags || []).join(', ') || '-'}</div>`;
-    html += `<div><strong>Permissions:</strong> manage=${info.can_manage_user ? 'Y' : 'N'} block=${info.can_block_user ? 'Y' : 'N'} merge=${info.can_merge_users ? 'Y' : 'N'}</div>`;
+    let html = `<div class="mb-1"><span class="font-medium text-gray-700 dark:text-gray-300">Can communicate:</span> <span class="${badge(info.can_communicate ? 'green' : 'red')}">${info.can_communicate ? 'YES' : 'NO'}</span></div>`;
+    html += '<div class="font-medium text-gray-700 dark:text-gray-300 mb-0.5">Reasons:</div><ul class="list-disc pl-4 space-y-0.5">';
+    (info.reasons || []).forEach(r => { html += `<li>${r}</li>`; });
+    html += `</ul><div class="mt-1"><span class="font-medium text-gray-700 dark:text-gray-300">Tags:</span> ${(info.user_tags || []).join(', ') || '-'}</div>`;
+    html += `<div><span class="font-medium text-gray-700 dark:text-gray-300">Perms:</span> manage=${info.can_manage_user ? 'Y' : 'N'} block=${info.can_block_user ? 'Y' : 'N'} merge=${info.can_merge_users ? 'Y' : 'N'}</div>`;
     container.innerHTML = html;
-  } catch(e) { toast(e.message, 'error'); }
+  } catch (e) { toast.error(e.message); }
 }
-
-// Update switchTab to load tag rules
-const origSwitchTab = switchTab;
-switchTab = function(name) {
-  origSwitchTab(name);
-  if (name === 'tag-rules') loadTagRules();
-};
 
 // Init
 loadUsers();
 </script>
-</body>
-</html>
+
+{% endblock %}
