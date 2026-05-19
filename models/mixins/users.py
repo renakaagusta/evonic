@@ -43,7 +43,7 @@ class UserMixin:
             self._init_user_tables(cursor)
 
     def _init_user_tables(self, cursor):
-        """Create all 7 user-related tables."""
+        """Create all 8 user-related tables."""
         # 1. users
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -182,6 +182,36 @@ class UserMixin:
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_audit_user ON user_audit_log(user_id, created_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_audit_action ON user_audit_log(action)")
+        # 8. tag_rules
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tag_rules (
+                id          TEXT PRIMARY KEY,
+                tag_pattern TEXT NOT NULL,
+                effect      TEXT NOT NULL CHECK(effect IN ('allow_all', 'deny', 'require_role', 'match_agent', 'role_tag')),
+                priority    INTEGER NOT NULL DEFAULT 5,
+                config      TEXT DEFAULT '{}',
+                description TEXT DEFAULT '',
+                enabled     INTEGER DEFAULT 1,
+                created_at  TEXT DEFAULT (datetime('now')),
+                updated_at  TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tag_rules_priority ON tag_rules(priority DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tag_rules_enabled ON tag_rules(enabled)")
+
+        # Seed default tag rules
+        cursor.execute("SELECT COUNT(*) FROM tag_rules")
+        if cursor.fetchone()[0] == 0:
+            seeds = [
+                ('public',          'allow_all',    0, '{}',       'Any agent can communicate with users having the public tag'),
+                ('agent:*',         'match_agent',  0, '{}',       'Agent-specific tag allows specific agent communication'),
+                ('restricted',      'deny',         20, '{}',      'Only agents with admin role can communicate'),
+                ('role:*',          'role_tag',      5, '{}',      'Role-based classification tag'),
+            ]
+            for tag_pattern, effect, priority, config, desc in seeds:
+                rule_id = f"builtin_{tag_pattern.replace(':', '_').replace('*', 'all')}"
+                cursor.execute("INSERT OR IGNORE INTO tag_rules (id, tag_pattern, effect, priority, config, description) VALUES (?, ?, ?, ?, ?, ?)",
+                               (rule_id, tag_pattern, effect, priority, config, desc))
 
     # ──────────────────────────────────────────────────────────
     # Internal helpers
@@ -863,26 +893,17 @@ class UserMixin:
     # ──────────────────────────────────────────────────────────
 
     def can_communicate(self, agent_id: str, user_id: str) -> bool:
-        """Check if an agent can communicate with a user.
+        """Check if an agent can communicate with a user using DB-driven tag rules.
 
         Access is granted if:
           1. They share at least one group (both active members), OR
-          2. Tag rules allow it (allow_all tags like 'public', 'agent:{id}')
-          3. NOT if a deny tag ('restricted') applies and agent lacks required role
+          2. Tag rules allow it (allow_all / match_agent rules evaluated first)
+          3. NOT if a deny/require_role rule applies (priority-ordered)
         """
         with self._connect() as conn:
             cursor = conn.cursor()
 
-            # First pass: unconditional allow tags
-            tags = self.get_tags(user_id)
-            for tag in tags:
-                if tag == 'public':
-                    return True
-                if tag.startswith('agent:'):
-                    if tag == f'agent:{agent_id}':
-                        return True
-
-            # Check group overlap
+            # Check group overlap first (fastest path)
             cursor.execute("""
                 SELECT 1 FROM group_members gm1
                 JOIN group_members gm2 ON gm1.group_id = gm2.group_id
@@ -893,14 +914,14 @@ class UserMixin:
             if cursor.fetchone():
                 return True
 
-            # Second pass: restrictive tag rules
-            for tag in sorted(tags, key=lambda t: self._tag_priority(t), reverse=True):
-                if tag == 'restricted' and not self._agent_has_role(agent_id, 'admin'):
-                    return False
-                if tag.startswith('role:'):
-                    pass  # role tags are informational, not restrictive by default
-
+        # Evaluate tag rules
+        tags = self.get_tags(user_id)
+        if not tags:
             return False
+
+        tag_rules = self.get_tag_rules(enabled_only=True)
+        allowed, reasons = self._evaluate_tag_rules(agent_id, tags, tag_rules)
+        return allowed
 
     def can_manage_user(self, agent_id: str, user_id: str = None) -> bool:
         """Check if an agent can modify user profile, tags, groups.
@@ -916,21 +937,10 @@ class UserMixin:
         return self._agent_has_role(agent_id, 'admin')
 
     def get_access_control_info(self, agent_id: str, user_id: str) -> Dict[str, Any]:
-        """Return transparency info: why access is granted or denied."""
+        """Return transparency info: why access is granted or denied, with rule evaluation trace."""
         result = {'agent_id': agent_id, 'user_id': user_id, 'can_communicate': False, 'reasons': []}
 
-        # Check tags
-        tags = self.get_tags(user_id)
-        for tag in tags:
-            if tag == 'public':
-                result['can_communicate'] = True
-                result['reasons'].append(f"User has 'public' tag — any agent can communicate")
-            if tag.startswith('agent:'):
-                if tag == f'agent:{agent_id}':
-                    result['can_communicate'] = True
-                    result['reasons'].append(f"User has '{tag}' tag — specific agent access")
-
-        # Check group overlap
+        # Check group overlap first
         with self._connect() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -946,20 +956,29 @@ class UserMixin:
                 result['can_communicate'] = True
                 result['reasons'].append(f"Shared groups: {', '.join(shared_groups)}")
 
-        # Check deny tags
-        for tag in tags:
-            if tag == 'restricted' and not self._agent_has_role(agent_id, 'admin'):
-                result['can_communicate'] = False
-                result['reasons'].append(f"User has 'restricted' tag — admin role required")
-
+        # Tag rules evaluation (only matters if group check didn't already allow)
         if not result['can_communicate']:
-            result['reasons'].append("No shared groups and no allow-tags matched")
+            tags = self.get_tags(user_id)
+            tag_rules = self.get_tag_rules(enabled_only=True)
+            allowed, rule_reasons = self._evaluate_tag_rules(agent_id, tags, tag_rules)
+
+            if rule_reasons:
+                result['reasons'].extend(rule_reasons)
+
+            if allowed:
+                result['can_communicate'] = True
+
+            if not result['can_communicate'] and not result['reasons']:
+                result['reasons'].append("No shared groups and no allow-rules matched")
 
         # Permission checks
         result['can_manage_user'] = self.can_manage_user(agent_id, user_id)
         result['can_block_user'] = self.can_block_user(agent_id, user_id)
         result['can_merge_users'] = self.can_merge_users(agent_id)
-        result['user_tags'] = tags
+        result['user_tags'] = self.get_tags(user_id)
+        result['active_rules'] = [{'id': r['id'], 'tag_pattern': r['tag_pattern'],
+                                   'effect': r['effect'], 'priority': r['priority']}
+                                  for r in self.get_tag_rules(enabled_only=True)]
         result['agent_groups'] = [g['name'] for g in self.get_agent_groups(agent_id)]
 
         return result
@@ -1004,6 +1023,155 @@ class UserMixin:
         return None
 
     # ──────────────────────────────────────────────────────────
+
+    # -----------------------------------------------------------------------
+    # Tag Rules - CRUD
+    # -----------------------------------------------------------------------
+
+    def get_tag_rules(self, enabled_only: bool = False) -> List[Dict[str, Any]]:
+        """List all tag rules, ordered by priority descending."""
+        with self._connect() as conn:
+            conn.row_factory = self._row_factory
+            cursor = conn.cursor()
+            if enabled_only:
+                cursor.execute("SELECT * FROM tag_rules WHERE enabled = 1 ORDER BY priority DESC")
+            else:
+                cursor.execute("SELECT * FROM tag_rules ORDER BY priority DESC")
+            return self._rows_to_list(cursor.fetchall())
+
+    def get_tag_rule(self, rule_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single tag rule by ID."""
+        with self._connect() as conn:
+            conn.row_factory = self._row_factory
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM tag_rules WHERE id = ?", (rule_id,))
+            return self._row_to_dict(cursor.fetchone())
+
+    def create_tag_rule(self, rule_id: str, tag_pattern: str, effect: str,
+                        priority: int = 5, config: dict = None,
+                        description: str = '') -> Optional[Dict[str, Any]]:
+        """Create a new tag rule."""
+        valid_effects = {'allow_all', 'deny', 'require_role', 'match_agent', 'role_tag'}
+        if effect not in valid_effects:
+            raise ValueError(f"Invalid effect: {effect}. Must be one of {valid_effects}")
+        config_json = json.dumps(config or {})
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO tag_rules (id, tag_pattern, effect, priority, config, description)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (rule_id, tag_pattern, effect, priority, config_json, description))
+            conn.commit()
+        return self.get_tag_rule(rule_id)
+
+    def update_tag_rule(self, rule_id: str, updates: dict) -> Optional[Dict[str, Any]]:
+        """Update a tag rule. Allowed fields: tag_pattern, effect, priority, config, description, enabled."""
+        allowed = {'tag_pattern', 'effect', 'priority', 'config', 'description', 'enabled'}
+        filtered = {k: v for k, v in updates.items() if k in allowed}
+        if not filtered:
+            return self.get_tag_rule(rule_id)
+        if 'config' in filtered and isinstance(filtered['config'], dict):
+            filtered['config'] = json.dumps(filtered['config'])
+        if 'effect' in filtered:
+            valid = {'allow_all', 'deny', 'require_role', 'match_agent', 'role_tag'}
+            if filtered['effect'] not in valid:
+                raise ValueError(f"Invalid effect: {filtered['effect']}")
+        set_clause = ', '.join(f"{k} = ?" for k in filtered)
+        values = list(filtered.values()) + [rule_id]
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE tag_rules SET {set_clause}, updated_at = datetime('now') WHERE id = ?", values)
+            conn.commit()
+        return self.get_tag_rule(rule_id)
+
+    def delete_tag_rule(self, rule_id: str) -> bool:
+        """Delete a tag rule."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM tag_rules WHERE id = ?", (rule_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def toggle_tag_rule(self, rule_id: str) -> Optional[Dict[str, Any]]:
+        """Toggle the enabled status of a tag rule."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE tag_rules SET enabled = CASE WHEN enabled THEN 0 ELSE 1 END, updated_at = datetime('now') WHERE id = ?", (rule_id,))
+            conn.commit()
+        return self.get_tag_rule(rule_id)
+
+    # -----------------------------------------------------------------------
+    # Tag Rules - Engine
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _tag_matches_pattern(tags: List[str], pattern: str) -> bool:
+        """Check if any tag matches a pattern (exact or wildcard)."""
+        if '*' in pattern:
+            prefix = pattern.replace('*', '')
+            return any(t.startswith(prefix) for t in tags)
+        return pattern in tags
+
+    def _evaluate_tag_rules(self, agent_id: str, tags: List[str],
+                            tag_rules: List[Dict[str, Any]] = None) -> tuple:
+        """Evaluate tag rules and return (allowed: bool, reasons: List[str]).
+
+        First pass: unconditional allow rules (allow_all, match_agent) return immediately.
+        Second pass: priority-ordered evaluation -- deny / require_role rules.
+        """
+        if tag_rules is None:
+            tag_rules = self.get_tag_rules(enabled_only=True)
+
+        sorted_rules = sorted(tag_rules, key=lambda r: r['priority'], reverse=True)
+        reasons = []
+
+        # FIRST PASS: unconditional allow rules (allow_all, match_agent)
+        for rule in sorted_rules:
+            if not rule['enabled']:
+                continue
+            if not self._tag_matches_pattern(tags, rule['tag_pattern']):
+                continue
+
+            if rule['effect'] == 'allow_all':
+                reasons.append(f"Allow-all rule matched: {rule['tag_pattern']} (rule: {rule['id']})")
+                return (True, reasons)
+
+            elif rule['effect'] == 'match_agent':
+                if rule['tag_pattern'] == 'agent:*':
+                    agent_tag = f'agent:{agent_id}'
+                    if agent_tag in tags:
+                        reasons.append(f"Agent match: {rule['tag_pattern']} -> {agent_id} (rule: {rule['id']})")
+                        return (True, reasons)
+                # For exact match agent:X patterns
+                specific_pattern = rule['tag_pattern'].replace('*', agent_id)
+                if specific_pattern in tags:
+                    reasons.append(f"Agent match: {rule['tag_pattern']} -> {agent_id} (rule: {rule['id']})")
+                    return (True, reasons)
+
+        # SECOND PASS: restrictive rules (deny, require_role) - priority descending
+        for rule in sorted_rules:
+            if not rule['enabled']:
+                continue
+            if not self._tag_matches_pattern(tags, rule['tag_pattern']):
+                continue
+
+            if rule['effect'] == 'deny':
+                reasons.append(f"Deny rule: {rule['tag_pattern']} (priority {rule['priority']}, rule: {rule['id']})")
+
+            elif rule['effect'] == 'require_role':
+                cfg = json.loads(rule.get('config', '{}')) if isinstance(rule.get('config'), str) else rule.get('config', {})
+                required_roles = cfg.get('roles', [])
+                if required_roles:
+                    has_any = any(self._agent_has_role(agent_id, r) for r in required_roles)
+                    if not has_any:
+                        reasons.append(f"Role required: {required_roles} for tag {rule['tag_pattern']} (rule: {rule['id']})")
+
+        if reasons:
+            return (False, reasons)
+
+        reasons.append("Default deny: no allow-rule matched")
+        return (False, reasons)
+
     # Internal helpers — tag rules & agent roles
     # ──────────────────────────────────────────────────────────
 
@@ -1019,19 +1187,28 @@ class UserMixin:
         return priorities.get(tag, 0)
 
     def _agent_has_role(self, agent_id: str, role: str) -> bool:
-        """Check if an agent has a specific role via group membership."""
+        """Check if an agent has a specific role via group membership.
+        Accepts either a single role string or a list of roles (returns True if any match)."""
+        if isinstance(role, (list, tuple)):
+            if not role:
+                return False
+            placeholders = ",".join("?" for _ in role)
+            roles = role
+        else:
+            placeholders = "?"
+            roles = [role]
         with self._connect() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT 1 FROM group_members gm
                 JOIN groups g ON gm.group_id = g.id
                 WHERE gm.member_type = 'agent'
                   AND gm.member_id = ?
-                  AND g.normalized_name = ?
+                  AND g.normalized_name IN ({placeholders})
                   AND gm.removed_at IS NULL
                   AND g.deleted_at IS NULL
                 LIMIT 1
-            """, (agent_id, role))
+            """, (agent_id, *roles))
             return cursor.fetchone() is not None
 
     # ──────────────────────────────────────────────────────────

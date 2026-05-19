@@ -316,4 +316,76 @@ def create_blueprint():
         info = _db().get_access_control_info(agent_id, user_id)
         return jsonify({'access_info': info})
 
+    # ---- Tag Rules ----
+
+    @bp.route(f'{API_PREFIX}/tag-rules', methods=['GET'])
+    def api_list_tag_rules():
+        enabled_only = request.args.get('enabled_only', '').lower() in ('1', 'true')
+        rules = _db().get_tag_rules(enabled_only=enabled_only)
+        return jsonify({'rules': rules})
+
+    @bp.route(f'{API_PREFIX}/tag-rules', methods=['POST'])
+    def api_create_tag_rule():
+        data = request.get_json() or {}
+        rule_id = data.get('id')
+        tag_pattern = data.get('tag_pattern')
+        effect = data.get('effect')
+        if not rule_id or not tag_pattern or not effect:
+            return _json_err('id, tag_pattern, and effect are required')
+        priority = data.get('priority', 5)
+        config = data.get('config', {})
+        description = data.get('description', '')
+        try:
+            rule = _db().create_tag_rule(rule_id, tag_pattern, effect,
+                                         priority=priority, config=config,
+                                         description=description)
+        except ValueError as e:
+            return _json_err(str(e))
+        if not rule:
+            return _json_err('Failed to create tag rule', 500)
+        return jsonify({'rule': rule}), 201
+
+    @bp.route(f'{API_PREFIX}/tag-rules/<rule_id>', methods=['GET'])
+    def api_get_tag_rule(rule_id):
+        rule = _db().get_tag_rule(rule_id)
+        if not rule:
+            return _json_err('Tag rule not found', 404)
+        return jsonify({'rule': rule})
+
+    @bp.route(f'{API_PREFIX}/tag-rules/<rule_id>', methods=['PUT'])
+    def api_update_tag_rule(rule_id):
+        data = request.get_json() or {}
+        try:
+            rule = _db().update_tag_rule(rule_id, data)
+        except ValueError as e:
+            return _json_err(str(e))
+        if not rule:
+            return _json_err('Tag rule not found', 404)
+        return jsonify({'rule': rule})
+
+    @bp.route(f'{API_PREFIX}/tag-rules/<rule_id>', methods=['DELETE'])
+    def api_delete_tag_rule(rule_id):
+        ok = _db().delete_tag_rule(rule_id)
+        if not ok:
+            return _json_err('Tag rule not found', 404)
+        return jsonify({'status': 'deleted'})
+
+    @bp.route(f'{API_PREFIX}/tag-rules/<rule_id>/toggle', methods=['PUT'])
+    def api_toggle_tag_rule(rule_id):
+        rule = _db().toggle_tag_rule(rule_id)
+        if not rule:
+            return _json_err('Tag rule not found', 404)
+        return jsonify({'rule': rule, 'enabled': rule['enabled']})
+
+    @bp.route(f'{API_PREFIX}/check-access', methods=['POST'])
+    def api_check_access():
+        """Debug endpoint to evaluate access control for a given agent+user pair."""
+        data = request.get_json() or {}
+        agent_id = data.get('agent_id', _get_agent_id())
+        user_id = data.get('user_id', '')
+        if not agent_id or not user_id:
+            return _json_err('agent_id and user_id are required')
+        info = _db().get_access_control_info(agent_id, user_id)
+        return jsonify({'access_info': info})
+
     return bp

@@ -68,6 +68,7 @@
   <div class="tabs">
     <button class="tab active" onclick="switchTab('users')">Users</button>
     <button class="tab" onclick="switchTab('groups')">Groups</button>
+    <button class="tab" onclick="switchTab('tag-rules')">Tag Rules</button>
   </div>
 
   <div class="tab-content">
@@ -110,6 +111,28 @@
           </tr>
         </thead>
         <tbody id="group-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+    <!-- Tag Rules Tab -->
+    <div id="tab-tag-rules" class="tab-pane">
+      <div class="search-bar">
+        <button onclick="showCreateTagRuleModal()">+ New Rule</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Pattern</th>
+            <th>Effect</th>
+            <th>Priority</th>
+            <th>Config</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tag-rule-table-body"></tbody>
       </table>
     </div>
   </div>
@@ -166,6 +189,13 @@
         <div class="detail-section">
           <h3>Audit Log</h3>
           <div id="detail-audit" style="max-height: 150px; overflow-y: auto; font-size: 12px;"></div>
+        </div>
+        <div class="detail-section">
+          <h3>Access Control</h3>
+          <div id="detail-access-info" style="font-size: 12px; max-height: 150px; overflow-y: auto;">
+            Click "Check Access" to evaluate
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="checkAccessControl()" style="margin-top:4px;">Check Access</button>
         </div>
         <div class="detail-section">
           <h3>Danger Zone</h3>
@@ -241,6 +271,34 @@
   </div>
 </div>
 
+<!-- Create/Edit Tag Rule Modal -->
+<div id="tag-rule-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="tag-rule-modal-title">Create Tag Rule</h2>
+      <span class="close" onclick="closeModal('tag-rule-modal')">&times;</span>
+    </div>
+    <div class="form-group"><label>Rule ID</label><input type="text" id="tr-id" placeholder="e.g. custom_vip_allow"></div>
+    <div class="form-group"><label>Tag Pattern</label><input type="text" id="tr-pattern" placeholder="e.g. vip, agent:*, role:admin"></div>
+    <div class="form-group"><label>Effect</label>
+      <select id="tr-effect">
+        <option value="allow_all">allow_all</option>
+        <option value="deny">deny</option>
+        <option value="require_role">require_role</option>
+        <option value="match_agent">match_agent</option>
+        <option value="role_tag">role_tag</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Priority (higher = evaluated first)</label><input type="number" id="tr-priority" value="5"></div>
+    <div class="form-group" id="tr-config-group" style="display:none;">
+      <label>Config (JSON, e.g. {"roles": ["admin"]})</label>
+      <textarea id="tr-config" placeholder='{"roles": ["admin"]}'></textarea>
+    </div>
+    <div class="form-group"><label>Description</label><input type="text" id="tr-desc" placeholder="What this rule does"></div>
+    <button class="btn btn-primary" onclick="saveTagRule()">Save</button>
+  </div>
+</div>
+
 <!-- Group Detail Modal -->
 <div id="group-modal" class="modal">
   <div class="modal-content" style="max-width: 600px;">
@@ -276,7 +334,12 @@ function switchTab(name) {
   else loadUsers();
 }
 
-function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+  if (id === 'tag-rule-modal') {
+    document.getElementById('tr-id').disabled = false;
+  }
+}
 function showModal(id) { document.getElementById(id).style.display = 'block'; }
 
 async function api(method, path, body=null) {
@@ -554,6 +617,137 @@ async function deleteGroup(id) {
     toast('Group deleted', 'success');
   } catch(e) { toast(e.message, 'error'); }
 }
+
+// ---- Tag Rules ----
+
+let editingTagRuleId = null;
+
+async function loadTagRules() {
+  try {
+    const data = await api('GET', '/api/user-directory/tag-rules');
+    const tbody = document.getElementById('tag-rule-table-body');
+    tbody.innerHTML = '';
+    data.rules.forEach(r => {
+      const eClass = r.effect === 'allow_all' ? 'badge-green' : r.effect === 'deny' ? 'badge-red' : r.effect === 'require_role' ? 'badge-orange' : r.effect === 'match_agent' ? 'badge-blue' : 'badge-gray';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><code>${r.tag_pattern}</code></td><td><span class="badge ${eClass}">${r.effect}</span></td><td>${r.priority}</td><td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;">${r.config !== '{}' ? r.config : '-'}</td><td>${r.description || '-'}</td><td><span class="badge ${r.enabled ? 'badge-green' : 'badge-red'}">${r.enabled ? 'ON' : 'OFF'}</span></td><td><button class="btn btn-outline btn-sm" onclick="editTagRule('${r.id}')">Edit</button> <button class="btn btn-outline btn-sm" onclick="toggleTagRule('${r.id}')">${r.enabled ? 'Disable' : 'Enable'}</button> <button class="btn btn-danger btn-sm" onclick="deleteTagRule('${r.id}')">Del</button></td>`;
+      tbody.appendChild(tr);
+    });
+  } catch(e) { toast('Failed to load rules: ' + e.message, 'error'); }
+}
+
+function showCreateTagRuleModal() {
+  editingTagRuleId = null;
+  document.getElementById('tag-rule-modal-title').textContent = 'Create Tag Rule';
+  document.getElementById('tr-id').value = '';
+  document.getElementById('tr-pattern').value = '';
+  document.getElementById('tr-effect').value = 'allow_all';
+  document.getElementById('tr-priority').value = '5';
+  document.getElementById('tr-config').value = '';
+  document.getElementById('tr-desc').value = '';
+  document.getElementById('tr-config-group').style.display = 'none';
+  showModal('tag-rule-modal');
+}
+
+async function editTagRule(id) {
+  editingTagRuleId = id;
+  try {
+    const data = await api('GET', `/api/user-directory/tag-rules/${id}`);
+    const r = data.rule;
+    document.getElementById('tag-rule-modal-title').textContent = 'Edit Tag Rule';
+    document.getElementById('tr-id').value = r.id;
+    document.getElementById('tr-pattern').value = r.tag_pattern;
+    document.getElementById('tr-effect').value = r.effect;
+    document.getElementById('tr-priority').value = r.priority;
+    document.getElementById('tr-config').value = r.config || '';
+    document.getElementById('tr-desc').value = r.description || '';
+    document.getElementById('tr-id').disabled = true;
+    // Show config field for require_role
+    document.getElementById('tr-config-group').style.display = r.effect === 'require_role' ? 'block' : 'none';
+    showModal('tag-rule-modal');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveTagRule() {
+  const id = document.getElementById('tr-id').value.trim();
+  const pattern = document.getElementById('tr-pattern').value.trim();
+  const effect = document.getElementById('tr-effect').value;
+  const priority = parseInt(document.getElementById('tr-priority').value) || 5;
+  const configStr = document.getElementById('tr-config').value.trim();
+  const description = document.getElementById('tr-desc').value.trim();
+  if (!id || !pattern || !effect) {
+    toast('ID, pattern, and effect are required', 'error');
+    return;
+  }
+  let config = {};
+  if (configStr) {
+    try { config = JSON.parse(configStr); } catch(e) { toast('Invalid JSON in config', 'error'); return; }
+  }
+  try {
+    if (editingTagRuleId) {
+      const updates = { tag_pattern: pattern, effect, priority, config, description };
+      await api('PUT', `/api/user-directory/tag-rules/${editingTagRuleId}`, updates);
+      toast('Rule updated', 'success');
+    } else {
+      await api('POST', '/api/user-directory/tag-rules', { id, tag_pattern: pattern, effect, priority, config, description });
+      toast('Rule created', 'success');
+    }
+    closeModal('tag-rule-modal');
+    loadTagRules();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function toggleTagRule(id) {
+  try {
+    const data = await api('PUT', `/api/user-directory/tag-rules/${id}/toggle`);
+    toast(data.enabled ? 'Rule enabled' : 'Rule disabled', 'success');
+    loadTagRules();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteTagRule(id) {
+  if (!confirm('Delete this tag rule?')) return;
+  try {
+    await api('DELETE', `/api/user-directory/tag-rules/${id}`);
+    loadTagRules();
+    toast('Rule deleted', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Show config field when effect changes
+document.addEventListener('change', function(e) {
+  if (e.target && e.target.id === 'tr-effect') {
+    document.getElementById('tr-config-group').style.display = e.target.value === 'require_role' ? 'block' : 'none';
+  }
+});
+
+// ---- Access Control Check ----
+
+async function checkAccessControl() {
+  if (!currentUserId) return;
+  try {
+    const data = await api('POST', '/api/user-directory/check-access', { user_id: currentUserId });
+    const info = data.access_info;
+    const container = document.getElementById('detail-access-info');
+    let html = `<div style="margin-bottom:4px;"><strong>Can communicate:</strong> <span class="badge ${info.can_communicate ? 'badge-green' : 'badge-red'}">${info.can_communicate ? 'YES' : 'NO'}</span></div>`;
+    html += '<div><strong>Reasons:</strong></div>';
+    html += '<ul style="margin:2px 0 0 16px;padding:0;">';
+    (info.reasons || []).forEach(r => {
+      html += `<li style="margin:1px 0;font-size:11px;">${r}</li>`;
+    });
+    html += '</ul>';
+    html += `<div style="margin-top:4px;"><strong>Tags:</strong> ${(info.user_tags || []).join(', ') || '-'}</div>`;
+    html += `<div><strong>Permissions:</strong> manage=${info.can_manage_user ? 'Y' : 'N'} block=${info.can_block_user ? 'Y' : 'N'} merge=${info.can_merge_users ? 'Y' : 'N'}</div>`;
+    container.innerHTML = html;
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Update switchTab to load tag rules
+const origSwitchTab = switchTab;
+switchTab = function(name) {
+  origSwitchTab(name);
+  if (name === 'tag-rules') loadTagRules();
+};
 
 // Init
 loadUsers();
