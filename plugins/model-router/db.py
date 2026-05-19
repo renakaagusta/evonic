@@ -346,7 +346,7 @@ def init_plugin_config():
     """Auto-populate MODEL_MODEL_MAP from installed models if not already set."""
     try:
         from models.db import db
-        plugin_id = 'model_router'
+        plugin_id = 'model-router'
         config_key = f'plugin_config:{plugin_id}:MODEL_MODEL_MAP'
         
         # Check if config already exists
