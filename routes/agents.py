@@ -8,7 +8,7 @@ import json
 import uuid
 import queue
 from typing import Dict, Any, List, Optional
-from flask import Blueprint, render_template, jsonify, request, Response, stream_with_context
+from flask import Blueprint, render_template, jsonify, request, Response, session, stream_with_context
 from models.db import db
 from models.chatlog import chatlog_manager, _DISPLAY_TYPES
 from backend.tools import tool_registry
@@ -652,6 +652,8 @@ def api_get_artifact(agent_id, filename):
 def api_delete_artifact(agent_id, filename):
     if not db.get_agent(agent_id):
         return jsonify({'error': 'Agent not found'}), 404
+    if not session.get('authenticated'):
+        return jsonify({'error': 'Authentication required'}), 401
     if '/' in filename or '\\' in filename or '..' in filename:
         return jsonify({'error': 'Invalid filename'}), 400
     fpath = os.path.join(_artifacts_dir(agent_id), filename)
