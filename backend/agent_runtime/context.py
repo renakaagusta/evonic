@@ -410,6 +410,27 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
             prompt += (f"\n\nCurrent date/time: {now.strftime('%A')}, "
                        f"{now.strftime('%Y-%m-%d')}, {now.strftime('%H:%M:%S')} (WIB/UTC+7)")
 
+    # Dynamic enabled-agent roster for super agents.
+    # Injects a lightweight list of enabled agents (id, name, description) so the
+    # super agent can quickly identify targets for delegation via send_agent_message.
+    # Uses raw SQL to avoid loading full agent records — minimal overhead.
+    if agent.get('is_super'):
+        try:
+            with db._connect() as conn:
+                rows = conn.execute(
+                    "SELECT id, name, description FROM agents WHERE enabled = 1 ORDER BY name"
+                ).fetchall()
+            if rows:
+                lines = ["\n## Enabled Agents\n",
+                         "These agents are available for delegation via `send_agent_message`:\n"]
+                for row in rows:
+                    agent_id, agent_name, agent_desc = row
+                    desc = f" — {agent_desc}" if agent_desc else ""
+                    lines.append(f"- **{agent_id}** ({agent_name}){desc}")
+                prompt += "\n".join(lines)
+        except Exception:
+            _logger.warning("Failed to inject agent roster for super agent %s", aid, exc_info=True)
+
     # Always append the empty-response recovery instruction
     prompt += (
         "\n\n## Response Recovery Rule\n"
