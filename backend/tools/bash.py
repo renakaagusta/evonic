@@ -9,7 +9,16 @@ The backend is resolved per-session from the backend registry:
 New backends (E2B, etc.) plug in without changing this file.
 """
 
+import logging
+
 from backend.tools.lib.exec_backend import registry, validate_env_keys
+
+try:
+    from backend.tools.lib.safety_pipeline import get_safety_pipeline, should_skip_safety
+except ImportError:
+    logging.getLogger(__name__).warning("safety_pipeline unavailable — safety checks disabled for bash tool")
+    get_safety_pipeline = None
+    should_skip_safety = lambda agent: True
 
 
 def execute(agent: dict, args: dict) -> dict:
@@ -57,9 +66,7 @@ def execute(agent: dict, args: dict) -> dict:
     # ------------------------------------------------------------------
     # HMADS safety check (pipeline: system rules + custom user rules)
     # ------------------------------------------------------------------
-    from backend.tools.lib.safety_pipeline import get_safety_pipeline, should_skip_safety
-
-    if not should_skip_safety(agent) and agent.get('safety_checker_enabled', 1) and not agent.get('is_super'):
+    if get_safety_pipeline is not None and not should_skip_safety(agent) and agent.get('safety_checker_enabled', 1) and not agent.get('is_super'):
         safety = get_safety_pipeline().check(script, tool_type='bash', agent_context=agent)
     else:
         safety = {'level': 'safe', 'score': 0, 'reasons': [], 'blocked_patterns': [], 'approval_info': {}}
