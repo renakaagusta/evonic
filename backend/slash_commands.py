@@ -106,6 +106,11 @@ def _register_builtins():
 
         db.clear_session(session_id, agent_id)
 
+        # Clear in-memory loaded skill state so skill badges disappear from session state UI
+        from backend.agent_runtime import agent_runtime
+        agent_runtime._session_skill_mds.pop(session_id, None)
+        agent_runtime._session_skill_tools.pop(session_id, None)
+
         # Reset agent state so next turn starts fresh in plan mode (no stale execute state).
         from backend.agent_state import AgentState
         fresh = AgentState()
