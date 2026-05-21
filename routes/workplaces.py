@@ -42,7 +42,7 @@ def api_list_workplaces():
     for w in workplaces:
         w['agents'] = db.get_workplace_agents(w['id'])
         w['agent_count'] = len(w['agents'])
-        if w.get('type') == 'cloud':
+        if w.get('type') == 'tunnel':
             connector = db.get_connector_by_workplace(w['id'])
             w['connector'] = connector
     return jsonify(workplaces)
@@ -56,8 +56,8 @@ def api_create_workplace():
 
     if not name:
         return jsonify({'error': 'name is required'}), 400
-    if workplace_type not in ('local', 'remote', 'cloud'):
-        return jsonify({'error': 'type must be local, remote, or cloud'}), 400
+    if workplace_type not in ('local', 'remote', 'tunnel'):
+        return jsonify({'error': 'type must be local, remote, or tunnel'}), 400
 
     config = data.get('config', {})
     if isinstance(config, str):
@@ -78,7 +78,7 @@ def api_get_workplace(workplace_id):
         return jsonify({'error': 'Not found'}), 404
     workplace['agents'] = db.get_workplace_agents(workplace_id)
     workplace['agent_count'] = len(workplace['agents'])
-    if workplace.get('type') == 'cloud':
+    if workplace.get('type') == 'tunnel':
         workplace['connector'] = db.get_connector_by_workplace(workplace_id)
     return jsonify(workplace)
 
@@ -232,8 +232,8 @@ def api_generate_pairing_code(workplace_id):
     workplace = db.get_workplace(workplace_id)
     if not workplace:
         return jsonify({'error': 'Not found'}), 404
-    if workplace.get('type') != 'cloud':
-        return jsonify({'error': 'Pairing codes are only for cloud workplaces'}), 400
+    if workplace.get('type') != 'tunnel':
+        return jsonify({'error': 'Pairing codes are only for tunnel workplaces'}), 400
 
     import config as cfg
     ttl = getattr(cfg, 'CONNECTOR_PAIRING_CODE_TTL', 300)
@@ -265,8 +265,8 @@ def api_unpair_connector(workplace_id):
     workplace = db.get_workplace(workplace_id)
     if not workplace:
         return jsonify({'error': 'Not found'}), 404
-    if workplace.get('type') != 'cloud':
-        return jsonify({'error': 'Only cloud workplaces have a connector'}), 400
+    if workplace.get('type') != 'tunnel':
+        return jsonify({'error': 'Only tunnel workplaces have a connector'}), 400
 
     connector = db.get_connector_by_workplace(workplace_id)
     if not connector:
@@ -381,8 +381,8 @@ def api_download_binary(workplace_id):
     workplace = db.get_workplace(workplace_id)
     if not workplace:
         return jsonify({'error': 'Not found'}), 404
-    if workplace.get('type') != 'cloud':
-        return jsonify({'error': 'Binary download is only for cloud workplaces'}), 400
+    if workplace.get('type') != 'tunnel':
+        return jsonify({'error': 'Binary download is only for tunnel workplaces'}), 400
 
     data = request.get_json() or {}
     platform = data.get('platform', 'linux-amd64')

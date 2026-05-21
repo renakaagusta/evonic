@@ -969,7 +969,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                 <select id="portal-backend-type" class="w-full p-2.5 border border-gray-300 rounded-md text-sm" onchange="updatePortalConfigFields()">
                     <option value="local">Local (host filesystem)</option>
                     <option value="ssh">SSH (remote server)</option>
-                    <option value="evonet">Evonet (cloud-connected machine)</option>
+                    <option value="evonet">Evonet (tunnel-connected machine)</option>
                 </select>
             </div>
             <!-- Workplace picker (for SSH and evonet) -->
@@ -1507,7 +1507,7 @@ async function saveGeneral() {
     const homeSel = document.getElementById('agent-workplace-id');
     const selectedOpt = homeSel ? homeSel.options[homeSel.selectedIndex] : null;
     const homeType = selectedOpt ? selectedOpt.dataset.type : '';
-    const isRemoteOrCloud = (homeType === 'remote' || homeType === 'cloud');
+    const isRemoteOrTunnel = (homeType === 'remote' || homeType === 'tunnel');
     const newWorkspace = document.getElementById('agent-workspace').value || null;
     workspaceChanged = (newWorkspace || null) !== (ORIGINAL_WORKSPACE || null);
     const res = await fetch(`/api/agents/${AGENT_ID}`, {
@@ -1522,7 +1522,7 @@ async function saveGeneral() {
             vision_enabled: document.getElementById('agent-vision').checked ? 1 : 0,
             attachments_enabled: document.getElementById('agent-attachments').checked ? 1 : 0,
             attachment_max_size_mb: Math.min(20, Math.max(1, parseInt(document.getElementById('agent-attachment-max-mb').value) || 20)),
-            sandbox_enabled: isRemoteOrCloud ? 0 : (document.getElementById('agent-sandbox').checked ? 1 : 0),
+            sandbox_enabled: isRemoteOrTunnel ? 0 : (document.getElementById('agent-sandbox').checked ? 1 : 0),
             safety_checker_enabled: document.getElementById('agent-safety-checker').checked ? 1 : 0,
             inject_agent_id: document.getElementById('agent-inject-id').checked ? 1 : 0,
             inject_datetime: document.getElementById('agent-inject-datetime').checked ? 1 : 0,
@@ -3494,7 +3494,7 @@ function updateWorkspaceVisibility() {
     if (!sel || !workspaceRow) return;
     const selectedOpt = sel.options[sel.selectedIndex];
     const homeType = selectedOpt ? selectedOpt.dataset.type : '';
-    if (homeType === 'cloud') {
+    if (homeType === 'tunnel') {
         workspaceRow.classList.add('hidden');
     } else {
         workspaceRow.classList.remove('hidden');
@@ -3512,7 +3512,7 @@ function updateChatPanelTitle(connectionStatus) {
     if (homeType === 'remote') {
         icon.classList.remove('hidden');
         icon.className = 'inline-block w-2.5 h-2.5 rounded-full animate-pulse flex-shrink-0 ' + (isDisconnected ? 'bg-red-500' : 'bg-green-500');
-    } else if (homeType === 'cloud') {
+    } else if (homeType === 'tunnel') {
         icon.classList.remove('hidden');
         icon.className = 'inline-block w-2.5 h-2.5 rounded-full animate-pulse flex-shrink-0 ' + (isDisconnected ? 'bg-red-500' : 'bg-blue-500');
     } else {
@@ -3528,7 +3528,7 @@ function updateSandboxVisibility() {
     if (!sel || !sandboxInput || !sandboxWarning || !sandboxLabel) return;
     const selectedOpt = sel.options[sel.selectedIndex];
     const homeType = selectedOpt ? selectedOpt.dataset.type : '';
-    if (homeType === 'remote' || homeType === 'cloud') {
+    if (homeType === 'remote' || homeType === 'tunnel') {
         sandboxInput.disabled = true;
         sandboxInput.checked = false;
         sandboxLabel.classList.add('opacity-50', 'cursor-not-allowed');
@@ -3551,7 +3551,7 @@ async function loadWorkplaceSelector() {
             const opt = document.createElement('option');
             opt.value = h.id;
             opt.dataset.type = h.type;
-            const typeLabel = {local: 'Local', remote: 'Remote SSH', cloud: 'Cloud'}[h.type] || h.type;
+            const typeLabel = {local: 'Local', remote: 'Remote SSH', tunnel: 'Tunnel'}[h.type] || h.type;
             opt.textContent = `${h.name} [${typeLabel}]`;
             if (h.id === CURRENT_HOME_ID) opt.selected = true;
             sel.appendChild(opt);

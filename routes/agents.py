@@ -62,7 +62,7 @@ def _apply_sandbox_workplace_policy(agent_data: dict, workplace_id: Optional[str
     if not workplace_id:
         return
     workplace = db.get_workplace(workplace_id)
-    if workplace and workplace.get('type') in ('remote', 'cloud'):
+    if workplace and workplace.get('type') in ('remote', 'tunnel'):
         agent_data['sandbox_enabled'] = 0
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

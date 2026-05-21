@@ -169,7 +169,7 @@ if not _reloader_active or _is_reloader_child:
     from backend.channels.registry import channel_manager
     channel_manager.start_all_enabled()
 
-    # Register Cloud Workplace connector WebSocket endpoint (served on main port via flask-sock)
+    # Register Tunnel Workplace connector WebSocket endpoint (served on main port via flask-sock)
     from backend.workplaces.connector_relay import connector_relay
 
     @sock.route('/ws/connector')
