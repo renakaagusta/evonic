@@ -109,6 +109,25 @@ def _build_portal_info(agent_id: str) -> list:
     return lines
 
 
+def _extract_kb_description(filepath: str) -> str | None:
+    """Parse YAML front matter in a KB file and return the `description:` value if present."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            first_line = f.readline().strip()
+            if first_line != "---":
+                return None
+            for line in f:
+                line_stripped = line.strip()
+                if line_stripped == "---":
+                    break
+                if line_stripped.startswith("description:"):
+                    val = line_stripped[len("description:"):].strip().strip("\"'")
+                    return val if val else None
+    except Exception:
+        pass
+    return None
+
+
 def _build_static_prompt(agent: Dict[str, Any]) -> str:
     """Build the static portion of the system prompt (no datetime, no onboarding).
 
@@ -174,8 +193,13 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
             parts.append("\n## Available Knowledge Files")
             parts.append("You can read these files using the `read` tool:")
             for f in files:
-                size = os.path.getsize(os.path.join(kb_dir, f))
-                parts.append(f"- {f} ({size / 1024:.1f} KB)")
+                fp = os.path.join(kb_dir, f)
+                size = os.path.getsize(fp)
+                brief = _extract_kb_description(fp)
+                if brief:
+                    parts.append(f"- {f} ({size / 1024:.1f} KB) — {brief}")
+                else:
+                    parts.append(f"- {f} ({size / 1024:.1f} KB)")
             parts.append("")
             parts.append("### KB Usage")
             parts.append("- **Save**: Use `write_file` with path `/_self/kb/filename` to store a new KB file.")
