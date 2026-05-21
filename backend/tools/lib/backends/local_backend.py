@@ -54,10 +54,13 @@ class LocalBackend(ExecutionBackend):
 
     @staticmethod
     def _poll_proc(proc, input_data: str, timeout: int, t0: float):
-        """Poll a Popen process in 1s intervals, returning (stdout, stderr).
+        """Poll a Popen process in 1s intervals, returning (stdout, stderr, reason).
 
-        Returns (None, None) if the process was killed externally (by
-        process_tracker) or timed out.
+        Returns (None, None, reason) if the process was killed externally or
+        timed out.  *reason* is ``'timeout'`` when the deadline was exceeded,
+        or ``'killed'`` when the process died from a signal during normal
+        execution (e.g. killed by process_tracker or by sudo/TTY failure).
+        On success, *reason* is ``None``.
         """
         deadline = t0 + timeout
         while True:
@@ -65,19 +68,19 @@ class LocalBackend(ExecutionBackend):
                 stdout, stderr = proc.communicate(input=input_data, timeout=1)
                 input_data = None
                 if proc.returncode is not None and proc.returncode < 0:
-                    return None, None
-                return stdout, stderr
+                    return None, None, 'killed'
+                return stdout, stderr, None
             except subprocess.TimeoutExpired:
                 input_data = None
                 if proc.poll() is not None:
                     if proc.returncode < 0:
-                        return None, None
+                        return None, None, 'killed'
                     try:
                         stdout, stderr = proc.communicate(timeout=2)
                     except subprocess.TimeoutExpired:
                         proc.kill()
                         stdout, stderr = proc.communicate(timeout=2)
-                    return stdout, stderr
+                    return stdout, stderr, None
                 if time.time() > deadline:
                     proc.terminate()
                     try:
@@ -85,7 +88,7 @@ class LocalBackend(ExecutionBackend):
                     except subprocess.TimeoutExpired:
                         proc.kill()
                         proc.wait(timeout=2)
-                    return None, None
+                    return None, None, 'timeout'
 
     def run_bash(self, script: str, timeout: int, env: dict) -> dict:
         run_env = dict(os.environ)
@@ -98,18 +101,29 @@ class LocalBackend(ExecutionBackend):
         )
         process_tracker.register(self._session_id, proc, proc.pid)
         try:
-            stdout, stderr = self._poll_proc(proc, script, timeout, t0)
+            stdout, stderr, reason = self._poll_proc(proc, script, timeout, t0)
             if stdout is None:
-                if proc.returncode is not None and proc.returncode < 0:
+                elapsed = round(time.time() - t0, 3)
+                if reason == 'timeout':
+                    return {
+                        'error': f'Execution timed out after {timeout}s',
+                        'exit_code': -1,
+                        'execution_time': elapsed,
+                    }
+                # Process killed by signal — check if user requested the stop
+                # (process_tracker.kill() unregisters before we get here)
+                was_user_stop = not process_tracker.is_registered(self._session_id)
+                if was_user_stop:
                     return {
                         'error': 'Execution stopped by user',
                         'exit_code': -9,
-                        'execution_time': round(time.time() - t0, 3),
+                        'execution_time': elapsed,
                     }
+                sig = -proc.returncode if proc.returncode else 'unknown'
                 return {
-                    'error': f'Execution timed out after {timeout}s',
-                    'exit_code': -1,
-                    'execution_time': round(time.time() - t0, 3),
+                    'error': f'Process killed by signal {sig}. This may happen when a command requires interactive input (e.g. sudo password prompt) that cannot be provided in this environment.',
+                    'exit_code': proc.returncode or -9,
+                    'execution_time': elapsed,
                 }
         finally:
             process_tracker.unregister(self._session_id)
@@ -134,18 +148,27 @@ class LocalBackend(ExecutionBackend):
         )
         process_tracker.register(self._session_id, proc, proc.pid)
         try:
-            stdout, stderr = self._poll_proc(proc, code, timeout, t0)
+            stdout, stderr, reason = self._poll_proc(proc, code, timeout, t0)
             if stdout is None:
-                if proc.returncode is not None and proc.returncode < 0:
+                elapsed = round(time.time() - t0, 3)
+                if reason == 'timeout':
+                    return {
+                        'error': f'Execution timed out after {timeout}s',
+                        'exit_code': -1,
+                        'execution_time': elapsed,
+                    }
+                was_user_stop = not process_tracker.is_registered(self._session_id)
+                if was_user_stop:
                     return {
                         'error': 'Execution stopped by user',
                         'exit_code': -9,
-                        'execution_time': round(time.time() - t0, 3),
+                        'execution_time': elapsed,
                     }
+                sig = -proc.returncode if proc.returncode else 'unknown'
                 return {
-                    'error': f'Execution timed out after {timeout}s',
-                    'exit_code': -1,
-                    'execution_time': round(time.time() - t0, 3),
+                    'error': f'Process killed by signal {sig}. This may happen when a command requires interactive input (e.g. sudo password prompt) that cannot be provided in this environment.',
+                    'exit_code': proc.returncode or -9,
+                    'execution_time': elapsed,
                 }
         finally:
             process_tracker.unregister(self._session_id)

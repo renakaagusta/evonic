@@ -48,6 +48,11 @@ class ProcessTracker:
                 'started_at': __import__('time').time(),
             }
 
+    def is_registered(self, session_id: str) -> bool:
+        """Return True if a process is currently registered for *session_id*."""
+        with self._lock:
+            return session_id in self._processes
+
     def unregister(self, session_id: str) -> None:
         """Remove the process entry after execution completes naturally."""
         with self._lock:
