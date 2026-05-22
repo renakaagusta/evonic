@@ -153,7 +153,7 @@ export class ChatUI {
                 // agent-state bridge: fire document-level event for tool:executed
                 if (evtName === 'tool:executed') {
                     const toolName = data && data.tool;
-                    if (['save_plan', 'set_mode', 'update_tasks', 'state'].includes(toolName)) {
+                    if (['save_plan', 'set_mode', 'update_tasks', 'state', 'use_skill', 'unload_skill'].includes(toolName)) {
                         document.dispatchEvent(new CustomEvent('evonic:agent-state-changed', { detail: data }));
                     }
                 }

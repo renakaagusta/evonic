@@ -1586,8 +1586,15 @@ def _tool_guard(agent_id: str, tool_name: str, args: dict) -> Optional[dict]:
         if task is None or task.get('status') in ('done', 'in-progress'):
             _pending_tasks.pop(agent_id, None)
             return None
-    except Exception:
-        pass
+        # Clear if task is no longer assigned to this agent
+        if task.get('assignee') and task.get('assignee') != agent_id:
+            _pending_tasks.pop(agent_id, None)
+            return None
+    except Exception as e:
+        import logging
+        logging.getLogger('kanban.tool_guard').warning(
+            'Self-heal DB check failed for agent %s task %s: %s', agent_id, task_id, e
+        )
 
     if autopilot:
         msg = (

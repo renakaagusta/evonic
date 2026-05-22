@@ -88,10 +88,7 @@ func (e *Executor) handleReadFileB64(req Request) Response {
 	if err := json.Unmarshal(req.Params, &p); err != nil {
 		return errResp(req.ID, "invalid params: "+err.Error())
 	}
-	path, err := resolvePath(p.Path, e.workDir)
-	if err != nil {
-		return errResp(req.ID, "read_file_b64 error: "+err.Error())
-	}
+	path := resolvePathAbs(p.Path, e.workDir)
 	fi, err := os.Stat(path)
 	if err != nil {
 		return errResp(req.ID, "read_file_b64 error: "+err.Error())
@@ -134,10 +131,7 @@ func (e *Executor) handleWriteFileB64(req Request) Response {
 	if err := json.Unmarshal(req.Params, &p); err != nil {
 		return errResp(req.ID, "invalid params: "+err.Error())
 	}
-	path, err := resolvePath(p.Path, e.workDir)
-	if err != nil {
-		return errResp(req.ID, "write_file_b64 error: "+err.Error())
-	}
+	path := resolvePathAbs(p.Path, e.workDir)
 
 	decoded, err := base64.StdEncoding.DecodeString(p.Data)
 	if err != nil {
@@ -196,4 +190,15 @@ func resolvePath(path, workDir string) (string, error) {
 		return "", fmt.Errorf("path escapes working directory: %s", path)
 	}
 	return clean, nil
+}
+
+// resolvePathAbs resolves a path without workDir sandboxing.
+// Absolute paths are returned cleaned; relative paths are joined with workDir.
+// Used by b64 transfer methods that receive pre-resolved absolute paths from
+// the server's portal_copy transfer engine.
+func resolvePathAbs(path, workDir string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(filepath.Join(workDir, path))
 }

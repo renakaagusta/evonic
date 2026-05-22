@@ -7,7 +7,7 @@
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
             <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Workplaces</h2>
-            <p class="text-sm text-gray-500 mt-1">Execution environments where agents operate — local, remote SSH, or cloud via Evonet</p>
+            <p class="text-sm text-gray-500 mt-1">Execution environments where agents operate — local, remote SSH, or tunnel via Evonet</p>
         </div>
         <button onclick="showCreateModal()"
                 class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
@@ -50,7 +50,7 @@
                     class="w-full p-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md text-sm focus:border-indigo-500 focus:outline-none">
                 <option value="local">Local — local directory</option>
                 <option value="remote">Remote — SSH server</option>
-                <option value="cloud">Cloud — Evonet connector</option>
+                <option value="tunnel">Tunnel — Evonet connector</option>
             </select>
         </div>
 
@@ -105,12 +105,12 @@
             </div>
         </div>
 
-        <!-- Cloud config -->
-        <div id="cfg-cloud" class="hidden mb-4">
+        <!-- Tunnel config -->
+        <div id="cfg-tunnel" class="hidden mb-4">
             <p class="text-sm text-gray-500 dark:text-gray-400">After creation, generate a pairing code and run <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">evonet pair</code> on the target device.</p>
             <div class="mt-3">
                 <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Workspace Path (on target device)</label>
-                <input id="cfg-cloud-workspace" type="text" placeholder="/workplace/user/evonic-agent"
+                <input id="cfg-tunnel-workspace" type="text" placeholder="/workplace/user/evonic-agent"
                        class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
             </div>
         </div>
@@ -134,11 +134,11 @@ function showToast(message, type = 'success') {
     setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 500); }, 3000);
 }
 
-const TYPE_LABELS = { local: 'Local', remote: 'Remote SSH', cloud: 'Cloud' };
+const TYPE_LABELS = { local: 'Local', remote: 'Remote SSH', tunnel: 'Tunnel' };
 const TYPE_COLORS = {
     local:  'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
     remote: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-    cloud:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    tunnel:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
 };
 const STATUS_DOT = {
     connected:    'bg-green-500',
@@ -213,7 +213,7 @@ function onTypeChange() {
     const t = $('#new-workplace-type').val();
     $('#cfg-local').toggleClass('hidden', t !== 'local');
     $('#cfg-remote').toggleClass('hidden', t !== 'remote');
-    $('#cfg-cloud').toggleClass('hidden', t !== 'cloud');
+    $('#cfg-tunnel').toggleClass('hidden', t !== 'tunnel');
 }
 
 function onAuthTypeChange() {
@@ -238,7 +238,7 @@ function buildConfig() {
         else cfg.password = $('#cfg-remote-pass').val();
         return cfg;
     }
-    if (t === 'cloud') return { workspace_path: $('#cfg-cloud-workspace').val().trim() };
+    if (t === 'tunnel') return { workspace_path: $('#cfg-tunnel-workspace').val().trim() };
     return {};
 }
 

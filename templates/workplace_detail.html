@@ -76,14 +76,14 @@
                     <input id="cfg-remote-workspace" type="text" class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
                 </div>
             </div>
-            <div id="config-cloud" class="hidden mb-4">
+            <div id="config-tunnel" class="hidden mb-4">
                 <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Workspace Path (on target device)</label>
-                <input id="cfg-cloud-workspace" type="text" class="w-full p-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md text-sm focus:border-indigo-500 focus:outline-none">
+                <input id="cfg-tunnel-workspace" type="text" class="w-full p-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md text-sm focus:border-indigo-500 focus:outline-none">
             </div>
             <button onclick="saveConfig()" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">Save</button>
         </div>
 
-        <!-- Cloud Pairing Card -->
+        <!-- Tunnel Pairing Card -->
         <div id="pairing-card" class="hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
             <h3 class="font-semibold text-gray-800 dark:text-gray-100 mb-1">Evonet Pairing</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Pair a device by generating a code and running <code class="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs">evonet pair</code> on it.</p>
@@ -122,7 +122,7 @@
             </div>
         </div>
 
-        <!-- Download Binary Card (cloud only) -->
+        <!-- Download Binary Card (tunnel only) -->
         <div id="build-binary-card" class="hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-4">
             <h3 class="font-semibold text-gray-800 dark:text-gray-100 mb-1">Download Pre-configured Binary</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Download an Evonet binary with credentials pre-embedded — just run it on the target device, no pairing step needed.</p>
@@ -190,7 +190,7 @@ let pairingExpiresAt = null;
 const TYPE_COLORS = {
     local:  'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
     remote: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-    cloud:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    tunnel:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
 };
 const STATUS_DOT_CLS = {
     connected:    'bg-green-500',
@@ -223,7 +223,7 @@ function loadWorkplace() {
 function applyWorkplaceData(h) {
     const cfg = (typeof h.config === 'string') ? JSON.parse(h.config || '{}') : (h.config || {});
     const type = h.type;
-    const TYPE_LABELS = { local: 'Local', remote: 'Remote SSH', cloud: 'Cloud' };
+    const TYPE_LABELS = { local: 'Local', remote: 'Remote SSH', tunnel: 'Tunnel' };
 
     $('#workplace-title').text(h.name);
     $('#workplace-subtitle').text(TYPE_LABELS[type] || type);
@@ -236,7 +236,7 @@ function applyWorkplaceData(h) {
 
     // Config form
     $('#edit-name').val(h.name);
-    $('#config-local, #config-remote, #config-cloud').addClass('hidden');
+    $('#config-local, #config-remote, #config-tunnel').addClass('hidden');
     if (type === 'local') {
         $('#config-local').removeClass('hidden');
         $('#cfg-local-path').val(cfg.workspace_path || '');
@@ -250,9 +250,9 @@ function applyWorkplaceData(h) {
         $('#cfg-remote-workspace').val(cfg.workspace_path || '');
         onAuthTypeChange();
         $('#connection-actions').removeClass('hidden');
-    } else if (type === 'cloud') {
-        $('#config-cloud').removeClass('hidden');
-        $('#cfg-cloud-workspace').val(cfg.workspace_path || '');
+    } else if (type === 'tunnel') {
+        $('#config-tunnel').removeClass('hidden');
+        $('#cfg-tunnel-workspace').val(cfg.workspace_path || '');
         $('#pairing-card').removeClass('hidden');
         $('#build-binary-card').removeClass('hidden');
         applyConnectorData(h.connector, h.status);
@@ -303,7 +303,7 @@ function buildConfig() {
         else cfg.password = $('#cfg-remote-pass').val();
         return cfg;
     }
-    if (type === 'cloud') return { workspace_path: $('#cfg-cloud-workspace').val().trim() };
+    if (type === 'tunnel') return { workspace_path: $('#cfg-tunnel-workspace').val().trim() };
     return {};
 }
 

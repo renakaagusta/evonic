@@ -233,8 +233,8 @@ class TestReturnStructure:
 
     def test_suggestion_is_descriptive(self):
         r = check_long_running("make -j4")
-        assert "long time" in r['suggestion']
-        assert "tmux" in r['suggestion'] or "screen" in r['suggestion']
+        assert "Do NOT retry" in r['suggestion']
+        assert "run_script" in r['suggestion']
 
 
 # ============================================================================
@@ -288,8 +288,8 @@ class TestBashIntegration:
         agent = {'session_id': 'test-lr-guard'}
         r = execute(agent, {'script': 'make -j4'})
         assert 'error' in r
-        assert r['level'] == 'long_running'
-        assert 'run_script' in r
+        assert 'BLOCKED' in r['error']
+        assert 'EVONIC_LR_BYPASS' in r['error']
 
     def test_execute_allows_safe_command(self):
         from backend.tools.bash import execute
@@ -302,7 +302,7 @@ class TestBashIntegration:
         from backend.tools.bash import execute
         agent = {'session_id': 'test-lr-super', 'is_super': True}
         r = execute(agent, {'script': 'cmake -B build'})
-        assert r.get('level') == 'long_running'
+        assert 'BLOCKED' in r.get('error', '')
 
 
 # ============================================================================

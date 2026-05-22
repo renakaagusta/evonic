@@ -106,6 +106,11 @@ def _register_builtins():
 
         db.clear_session(session_id, agent_id)
 
+        # Clear in-memory loaded skill state so skill badges disappear from session state UI
+        from backend.agent_runtime import agent_runtime
+        agent_runtime._session_skill_mds.pop(session_id, None)
+        agent_runtime._session_skill_tools.pop(session_id, None)
+
         # Reset agent state so next turn starts fresh in plan mode (no stale execute state).
         from backend.agent_state import AgentState
         fresh = AgentState()
@@ -169,8 +174,9 @@ def _register_builtins():
         except Exception:
             is_super = False
         lines = ["**Available commands:**"]
+        super_only = {"restart", "cd", "cwd"}
         for name, desc in commands:
-            if name == "restart" and not is_super:
+            if name in super_only and not is_super:
                 continue
             lines.append(f"- `/{name}` — {desc}")
         return "\n".join(lines)
@@ -435,6 +441,60 @@ def _register_builtins():
         "Switch to plan mode",
     )
 
+    # /exec — Switch agent to execute mode
+    def exec_handler(
+        session_id: str,
+        agent_id: str,
+        external_user_id: str,
+        channel_id: Optional[str],
+        args: str,
+    ) -> str:
+        from models.db import db
+        from backend.agent_state import AgentState
+        from models.chat import agent_chat_manager
+
+        # Check if agent state is enabled for this agent
+        agent = db.get_agent(agent_id)
+        if not agent:
+            return "Error: Agent not found."
+
+        if not agent.get("enable_agent_state"):
+            return "Agent state is not enabled for this agent."
+
+        # Load current per-session state
+        _db = agent_chat_manager.get(agent_id)
+        session_content = _db.get_session_state(session_id)
+
+        if session_content:
+            ms = AgentState.deserialize(session_content)
+        else:
+            ms = AgentState()  # fresh plan-mode state
+
+        # Transition to execute mode
+        result = ms.set_mode("execute", reason="slash command /exec")
+        if "error" in result:
+            return f"Error: {result['error']}"
+
+        # Save per-session state (mode changed to execute)
+        import json
+        session_data = {
+            "mode": ms.mode,
+            "tasks": ms.tasks,
+            "next_task_id": ms._next_task_id,
+            "plan_file": ms.plan_file,
+            "states": ms.states,
+            "auto_trivial": ms.auto_trivial,
+        }
+        _db.upsert_session_state(session_id, json.dumps(session_data))
+
+        return "Switched to execute mode."
+
+    command_registry.register(
+        "exec",
+        exec_handler,
+        "Switch to execute mode",
+    )
+
     def unfocus_handler(
         session_id: str,
         agent_id: str,
@@ -674,10 +734,11 @@ def _register_builtins():
                 lines = [f"Model '{new_model_id}' not found. Available models:"]
                 for m in all_models:
                     m_name = m.get("name", "unknown")
-                    m_id = m.get("id", "")
                     m_model = m.get("model_name", "")
-                    enabled = "✓" if m.get("enabled") else "✗"
-                    lines.append(f"  [{enabled}] {m_id} — {m_name} ({m_model})")
+                    if m_model:
+                        lines.append(f"- {m_name} ({m_model})")
+                    else:
+                        lines.append(f"- {m_name}")
                 return "\n".join(lines)
             else:
                 return f"Model '{new_model_id}' not found and no models are configured."
@@ -690,9 +751,9 @@ def _register_builtins():
         model_name = model.get("name", "unknown")
         model_model = model.get("model_name", "")
         if model_model:
-            return f"Model set to: {model_name} ({model_model}) [id: {model['id']}]"
+            return f"Model set to: {model_name} ({model_model})"
         else:
-            return f"Model set to: {model_name} [id: {model['id']}]"
+            return f"Model set to: {model_name}"
 
     command_registry.register(
         "model",

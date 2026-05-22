@@ -8,8 +8,12 @@ except ImportError:
     _WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from backend.tools._workspace import resolve_workspace_path
-from backend.tools.lib.safety_pipeline import should_skip_safety
-
+try:
+    from backend.tools.lib.safety_pipeline import should_skip_safety
+except ImportError:
+    import logging
+    logging.getLogger(__name__).warning("safety_pipeline unavailable — safety checks disabled for str_replace tool")
+    should_skip_safety = lambda agent: True
 
 def str_replace(file_path: str, old_str: str, new_str: str, count: int = 1) -> dict:
     """

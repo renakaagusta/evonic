@@ -47,11 +47,34 @@ class TestShouldNudgeContinuation:
             "- **Nama:** Cek total tasks\n"
             "- **Aksi:** Saya akan mengecek semua task di kolom TODO"
         ),
+        # Second false positive: session 25ac767d (ERPNext test report)
+        # "Saya akan update" matched CONTINUATION_RE but "Berikut hasil" and
+        # "Catatan:" were not in PLANNING_RE, causing the full report to be
+        # nudged and the agent to reply [DONE] instead of showing the report.
+        (
+            "Skill ERPNext berfungsi dengan baik. Berikut hasil test:\n\n"
+            "**Koneksi**: OK\n\n"
+            "| No | Name | Type |\n|----|------|------|\n| 1 | Agung | Individual |\n\n"
+            "**Catatan**: Saya akan update best practices di SYSTEM.md."
+        ),
         # Completion + continuation in same text
         "Task sudah selesai. Saya akan mengirimkan laporannya nanti.",
         "Deployment sudah berhasil. Saya akan monitor hasilnya.",
         "Reminder sudah dijadwalkan. Saya akan kirimkan pukul 10.",
         "Pesan sudah dikirim. Saya akan follow up nanti.",
+        # Report with "Catatan:" marker
+        "Setup selesai. Catatan: saya perlu check lagi besok.",
+        # False positive: session 67fd3ea1 (explanation ending with user question)
+        # "saya akan" matched CONTINUATION_RE but the response is a complete
+        # explanation ending with "Mau saya langsung buatkan...?" asking for input.
+        (
+            "## Yang Akan Saya Lakukan Saat Diminta Membangun Confirmation Dialog\n\n"
+            "### 1. **Struktur HTML**\n- Menggunakan elemen `<dialog>` native\n\n"
+            "Mau saya langsung buatkan implementasi lengkapnya sekarang?"
+        ),
+        # English: agent asks permission after explaining what it will do
+        "I'll now create the component. Should I also add unit tests?",
+        "I'll proceed to update the config. Would you like me to add a backup first?",
     ])
     def test_final_on_planning_negation(self, text):
         """Text with both CONTINUATION_RE and PLANNING_RE → 'final' (not nudged)."""
@@ -122,6 +145,22 @@ class TestPlanningRE:
         "sudah dijadwalkan",
         "sudah dikirim",
         "Ringkasan hasil kerja",
+        "Berikut hasil test yang sudah dijalankan.",
+        "Berikut laporan lengkapnya.",
+        "Berikut data customer yang ditemukan.",
+        "Berikut status deploy terkini.",
+        "Catatan: perlu di-review lagi.",
+        # "asking user for permission" patterns — Indonesian
+        "Mau saya buatkan implementasinya?",
+        "Perlu saya jalankan testnya dulu?",
+        "Ingin saya tambahkan fitur itu?",
+        "Perlukah saya update konfigurasinya?",
+        "Haruskah saya deploy sekarang?",
+        # "asking user for permission" patterns — English
+        "Shall I proceed with the implementation?",
+        "Should I run the tests first?",
+        "Would you like me to create a PR?",
+        "Do you want me to fix this now?",
     ])
     def test_matches(self, text):
         assert PLANNING_RE.search(text), f"PLANNING_RE should match: {text!r}"

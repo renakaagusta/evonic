@@ -82,6 +82,19 @@ func (lw *LogWriter) flusher() {
 	}
 }
 
+// Clear removes all log lines immediately and updates the display.
+func (lw *LogWriter) Clear() {
+	lw.mu.Lock()
+	lw.lines = nil
+	lw.dirty = true
+	lw.mu.Unlock()
+
+	fyne.Do(func() {
+		lw.entry.SetText("")
+		lw.scroll.ScrollToTop()
+	})
+}
+
 func (lw *LogWriter) close() {
 	lw.once.Do(func() { close(lw.closeCh) })
 }

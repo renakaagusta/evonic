@@ -216,14 +216,71 @@ func TestWriteFileB64_CreatesParentDirs(t *testing.T) {
 	}
 }
 
-func TestReadFileB64_PathEscape(t *testing.T) {
+func TestReadFileB64_AbsolutePath(t *testing.T) {
 	dir := t.TempDir()
 	e := New(dir, false)
 
-	params, _ := json.Marshal(readFileB64Params{Path: "../../../etc/passwd"})
-	resp := e.Handle(Request{ID: "6", Method: "read_file_b64", Params: params})
-	if resp.OK {
-		t.Fatal("expected error for path escape, got OK")
+	// Write a file at an absolute path OUTSIDE the workDir
+	outsideDir := t.TempDir()
+	absPath := filepath.Join(outsideDir, "outside.bin")
+	content := []byte("absolute path content")
+	os.WriteFile(absPath, content, 0644)
+
+	params, _ := json.Marshal(readFileB64Params{Path: absPath, Offset: 0, Size: 0})
+	resp := e.Handle(Request{ID: "abs-read", Method: "read_file_b64", Params: params})
+	if !resp.OK {
+		t.Fatalf("expected OK for absolute path, got error: %s", resp.Error)
+	}
+	result := resp.Result.(map[string]any)
+	decoded, _ := base64.StdEncoding.DecodeString(result["data"].(string))
+	if string(decoded) != string(content) {
+		t.Errorf("content mismatch: got %q, want %q", decoded, content)
+	}
+}
+
+func TestWriteFileB64_AbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	e := New(dir, false)
+
+	outsideDir := t.TempDir()
+	absPath := filepath.Join(outsideDir, "outside-write.bin")
+	content := []byte("written via absolute path")
+	b64 := base64.StdEncoding.EncodeToString(content)
+
+	params, _ := json.Marshal(writeFileB64Params{
+		Path: absPath, Data: b64, Offset: 0, IsLast: true, Mode: "create",
+	})
+	resp := e.Handle(Request{ID: "abs-write", Method: "write_file_b64", Params: params})
+	if !resp.OK {
+		t.Fatalf("expected OK for absolute path, got error: %s", resp.Error)
+	}
+	written, err := os.ReadFile(absPath)
+	if err != nil {
+		t.Fatalf("read back error: %v", err)
+	}
+	if string(written) != string(content) {
+		t.Errorf("content mismatch: got %q, want %q", written, content)
+	}
+}
+
+func TestResolvePathAbs_Absolute(t *testing.T) {
+	got := resolvePathAbs("/Users/robin/Downloads/file", "/some/workdir/")
+	if got != "/Users/robin/Downloads/file" {
+		t.Errorf("got %q, want absolute path returned as-is", got)
+	}
+}
+
+func TestResolvePathAbs_Relative(t *testing.T) {
+	got := resolvePathAbs("sub/file.bin", "/home/user/")
+	if got != "/home/user/sub/file.bin" {
+		t.Errorf("got %q, want joined with workDir", got)
+	}
+}
+
+func TestResolvePathAbs_Cleans(t *testing.T) {
+	got := resolvePathAbs("/Users/robin/./Downloads/../Downloads/file", "/ignored/")
+	if got != "/Users/robin/Downloads/file" {
+		t.Errorf("got %q, want cleaned path", got)
 	}
 }
 

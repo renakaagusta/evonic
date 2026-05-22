@@ -8,7 +8,7 @@ import json
 import uuid
 import queue
 from typing import Dict, Any, List, Optional
-from flask import Blueprint, render_template, jsonify, request, Response, stream_with_context
+from flask import Blueprint, render_template, jsonify, request, Response, session, stream_with_context
 from models.db import db
 from models.chatlog import chatlog_manager, _DISPLAY_TYPES
 from backend.tools import tool_registry
@@ -62,7 +62,7 @@ def _apply_sandbox_workplace_policy(agent_data: dict, workplace_id: Optional[str
     if not workplace_id:
         return
     workplace = db.get_workplace(workplace_id)
-    if workplace and workplace.get('type') in ('remote', 'cloud'):
+    if workplace and workplace.get('type') in ('remote', 'tunnel'):
         agent_data['sandbox_enabled'] = 0
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -652,6 +652,8 @@ def api_get_artifact(agent_id, filename):
 def api_delete_artifact(agent_id, filename):
     if not db.get_agent(agent_id):
         return jsonify({'error': 'Agent not found'}), 404
+    if not session.get('authenticated'):
+        return jsonify({'error': 'Authentication required'}), 401
     if '/' in filename or '\\' in filename or '..' in filename:
         return jsonify({'error': 'Invalid filename'}), 400
     fpath = os.path.join(_artifacts_dir(agent_id), filename)
@@ -1195,10 +1197,44 @@ def api_chat_agent_state(agent_id):
     agent_data = _json.loads(agent_content) if agent_content else {}
 
     session_id = request.args.get('session_id', '').strip()
+    loaded_skills = []
     if session_id:
         session_content = db.get_session_state(session_id, agent_id=agent_id)
         session_data = _json.loads(session_content) if session_content else {}
         merged = {**agent_data, **session_data}
+
+        # Resolve loaded skills for this session
+        try:
+            from backend.agent_runtime import agent_runtime
+            from backend.skills_manager import skills_manager
+            # Start with skills that have tools (inject_tools)
+            seen_skill_ids = set()
+            for sk in agent_runtime.get_session_skills(session_id):
+                sk_id = sk['skill_id']
+                seen_skill_ids.add(sk_id)
+                try:
+                    name = skills_manager.get_skill_name(sk_id)
+                except Exception:
+                    name = sk_id  # fallback to skill_id on error
+                loaded_skills.append({
+                    'skill_id': sk_id,
+                    'name': name,
+                    'tool_count': sk.get('tool_count', 0),
+                })
+            # Also include prompt-only skills (system_md only, no inject_tools)
+            for sk_id in agent_runtime._session_skill_mds.get(session_id, {}):
+                if sk_id not in seen_skill_ids:
+                    try:
+                        name = skills_manager.get_skill_name(sk_id)
+                    except Exception:
+                        name = sk_id
+                    loaded_skills.append({
+                        'skill_id': sk_id,
+                        'name': name,
+                        'tool_count': 0,
+                    })
+        except Exception:
+            pass
     else:
         merged = agent_data
 
@@ -1241,8 +1277,9 @@ def api_chat_agent_state(agent_id):
             'focus': state.focus,
             'focus_reason': state.focus_reason,
             'active_model': active_model,
+            'loaded_skills': loaded_skills,
         })
-    return jsonify({'mode': None, 'active_model': None})
+    return jsonify({'mode': None, 'active_model': None, 'loaded_skills': loaded_skills})
 
 
 @agents_bp.route('/api/agents/<agent_id>/chat/clear', methods=['POST'])

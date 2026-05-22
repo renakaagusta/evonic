@@ -37,7 +37,7 @@ func GUIAvailable() bool { return true }
 // Must be called from the main goroutine.
 func RunGUI(cfg *config.Config) {
 	a := app.New()
-	w := a.NewWindow("Evonet")
+	w := a.NewWindow("Evonet v1.1.0")
 	w.Resize(fyne.NewSize(700, 420))
 
 	root := container.NewStack()
@@ -51,7 +51,7 @@ func RunGUI(cfg *config.Config) {
 // Must be called from the main goroutine.
 func ShowPairingDialog(prefilledServerURL string) {
 	a := app.New()
-	w := a.NewWindow("Evonet")
+	w := a.NewWindow("Evonet v1.1.0")
 	w.Resize(fyne.NewSize(700, 420))
 
 	root := container.NewStack()
@@ -86,6 +86,8 @@ func showConnectorView(a fyne.App, w fyne.Window, root *fyne.Container, cfg *con
 
 	resetBtn := widget.NewButton("Reset", nil)
 
+	clearBtn := widget.NewButton("Clear", nil)
+
 	aboutBtn := widget.NewButton("About", nil)
 	aboutBtn.Importance = widget.LowImportance
 	aboutBtn.OnTapped = func() {
@@ -93,7 +95,7 @@ func showConnectorView(a fyne.App, w fyne.Window, root *fyne.Container, cfg *con
 	}
 
 	topBar := container.NewBorder(nil, nil, aboutBtn,
-		container.NewHBox(resetBtn, toggleBtn),
+		container.NewHBox(resetBtn, clearBtn, toggleBtn),
 		container.NewStack(statusLabel, container.NewPadded(connectedText)),
 	)
 	connectorView := container.NewBorder(topBar, nil, nil, nil, logScroll)
@@ -161,6 +163,10 @@ func showConnectorView(a fyne.App, w fyne.Window, root *fyne.Container, cfg *con
 		showPairingView(a, w, root, "")
 	}
 
+	clearBtn.OnTapped = func() {
+		lw.Clear()
+	}
+
 	w.SetOnClosed(func() {
 		if client != nil {
 			client.Stop()
@@ -187,7 +193,7 @@ func showAboutDialog(w fyne.Window) {
 	desc.Alignment = fyne.TextAlignCenter
 	desc.Wrapping = fyne.TextWrapWord
 
-	version := widget.NewLabelWithStyle("Version 1.0.0 (GUI Mac)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	version := widget.NewLabelWithStyle("Version 1.1.0 (GUI Mac)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
 
 	separator := widget.NewSeparator()
 
@@ -290,7 +296,7 @@ func doPair(serverURL, code string) (*config.Config, error) {
 		"pairing_code": code,
 		"device_name":  hostname,
 		"platform":     runtime.GOOS,
-		"version":      "1.0.0",
+		"version":      "1.1.0",
 	}
 	body, _ := json.Marshal(payload)
 

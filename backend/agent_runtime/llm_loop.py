@@ -1390,6 +1390,7 @@ def run_tool_loop(agent: Dict[str, Any],
                     session_skill_tools.setdefault(session_id, {})[loaded_sid] = [
                         t for t in tools if t.get('function', {}).get('name', '') in set(injected_fns)
                     ]
+                    event_stream.emit('evonic:agent-state-changed', {'agent_id': agent_id, 'session_id': session_id})
                 # Add injected tool IDs to assigned_tool_ids for authorization guard
                 _assigned = agent_context.get('assigned_tool_ids')
                 if _assigned is not None and loaded_sid:
@@ -1406,6 +1407,7 @@ def run_tool_loop(agent: Dict[str, Any],
                 if loaded_sid:
                     _skill_system_mds[loaded_sid] = tool_result['system_md']
                     session_skill_mds.setdefault(session_id, {})[loaded_sid] = tool_result['system_md']
+                    event_stream.emit('evonic:agent-state-changed', {'agent_id': agent_id, 'session_id': session_id})
 
             # Lazy tool removal: unload_skill removes injected tools from context
             if fn_name == 'unload_skill' and isinstance(tool_result, dict) and tool_result.get('remove_tools'):
@@ -1429,6 +1431,7 @@ def run_tool_loop(agent: Dict[str, Any],
                 unload_sid = tool_result.get('id', '')
                 _skill_system_mds.pop(unload_sid, None)
                 session_skill_mds.get(session_id, {}).pop(unload_sid, None)
+                event_stream.emit('evonic:agent-state-changed', {'agent_id': agent_id, 'session_id': session_id})
 
             # ── Layer B: Tool Result Scanner (post-execution injection scan) ──
             _SCAN_RESULT_TOOLS = frozenset({'read_file', 'bash', 'runpy'})

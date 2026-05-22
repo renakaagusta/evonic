@@ -27,7 +27,7 @@ Agents are not tied to a single machine. A **Workplace** is a first-class execut
 
 - **Local** — sandboxed workspace on the host machine
 - **Remote** — SSH servers, edge devices, or any machine with network access
-- **Cloud** — lightweight Evonet connector that requires no public IP, no SSH, and no firewall rules
+- **Tunnel** — lightweight Evonet connector that requires no public IP, no SSH, and no firewall rules
 
 This means your agents can operate across your entire infrastructure — development laptops, production servers, and cloud instances — with a single abstraction layer.
 
@@ -61,7 +61,7 @@ When suspicious activity is detected, the system escalates to a human operator r
 | **Models** | Pluggable LLM backends — any OpenAI-compatible API, local or cloud |
 | **Skills** | Installable packages that bundle tool definitions with Python backends |
 | **Plugins** | Event-driven extensions for custom integrations and background workers |
-| **Workplaces** | Execution environments: local directories, SSH servers, or cloud devices via Evonet |
+| **Workplaces** | Execution environments: local directories, SSH servers, or tunnel devices via Evonet |
 | **Evonet** | Lightweight Go connector for remote execution without SSH or firewall rules |
 | **Scheduler** | Cron-based triggers, recurring tasks, and reminders for agents |
 | **Channels** | Connect agents to Telegram, WhatsApp, Discord, Slack, and custom interfaces |

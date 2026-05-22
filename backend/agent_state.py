@@ -31,6 +31,7 @@ from typing import Optional, Union
 
 import json
 import os
+import re
 
 # Project root: two levels up from this file (backend/agent_state.py → project root)
 _PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
@@ -47,6 +48,51 @@ STATUS_ICON = {
     "in_progress": "[~]",
     "done": "[x]",
 }
+
+# Regex to strip leading status indicators that LLMs sometimes embed in task text.
+_STATUS_PREFIX_RE = re.compile(
+    r'^(?:'
+    r'[\s]*(?:'
+    r'[\u2610\u2611\u2612\u2713\u2714\u2717\u2718\u27f3]'   # ☐☑☒✓✔✗✘⟳
+    r'|[\u23f3\u231b]'                                       # ⏳⌛
+    r'|\u2705|\u274c|\U0001f504'                             # ✅❌🔄
+    r'|\[(?:x|X| |~|DONE|done|TODO|WIP)\]'                  # [x] [ ] [~] [DONE] etc.
+    r')'
+    r')+[\s]*'
+    r'(?:#\d+[\s]*)?'                                        # optional #<id>
+)
+
+# Trailing suffixes LLMs append to indicate completion.
+_STATUS_SUFFIX_RE = re.compile(
+    r'\s*\((?:complete|completed|done|finished)\)\s*$',
+    re.IGNORECASE,
+)
+
+# Indicators that imply the task is already done.
+_DONE_INDICATORS = re.compile(
+    r'\u2705|\u2713|\u2714|\u2611|\u2612'                    # ✅✓✔☑☒
+    r'|\[(?:x|X|DONE|done)\]'
+    r'|\((?:complete|completed|done|finished)\)',
+    re.IGNORECASE,
+)
+
+
+def _sanitize_task_text(text: str) -> tuple[str, str | None]:
+    """Strip leading/trailing status indicators from task text.
+
+    Returns (cleaned_text, inferred_status) where inferred_status is
+    "done" / "in_progress" if completion markers were detected, else None.
+    """
+    raw = text
+    # Detect status before stripping
+    inferred = None
+    if _DONE_INDICATORS.search(raw):
+        inferred = "done"
+
+    cleaned = _STATUS_PREFIX_RE.sub('', raw, count=1)
+    cleaned = _STATUS_SUFFIX_RE.sub('', cleaned)
+    cleaned = cleaned.strip() or raw.strip()
+    return cleaned, inferred
 
 
 class AgentState:
@@ -162,10 +208,11 @@ class AgentState:
             self.tasks = list(done_tasks)
             self._next_task_id = max((t["id"] for t in self.tasks), default=0) + 1
             for t in tasks:
+                clean, inferred = _sanitize_task_text(str(t))
                 self.tasks.append({
                     "id": self._next_task_id,
-                    "text": str(t),
-                    "status": "pending",
+                    "text": clean,
+                    "status": inferred or "pending",
                 })
                 self._next_task_id += 1
             return {"result": f"Task list set with {len(self.tasks)} tasks ({len(done_tasks)} completed preserved).", "tasks": self._task_summary()}
@@ -173,7 +220,8 @@ class AgentState:
         if action == "add":
             if not text:
                 return {"error": "Action 'add' requires 'text'."}
-            task = {"id": self._next_task_id, "text": str(text), "status": "pending"}
+            clean, inferred = _sanitize_task_text(str(text))
+            task = {"id": self._next_task_id, "text": clean, "status": inferred or "pending"}
             self.tasks.append(task)
             self._next_task_id += 1
             return {"result": f"Task #{task['id']} added.", "task_id": task['id']}

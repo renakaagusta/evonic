@@ -1141,14 +1141,14 @@ class AgentRuntime:
                 self._message_queue.put(task)
 
     def _check_evonet_offline(self, agent: dict, ctx: SessionContext):
-        """Return a completed turn result dict if the agent's Cloud Workplace is offline,
+        """Return a completed turn result dict if the agent's Tunnel Workplace is offline,
         otherwise return None so normal processing continues."""
         workplace_id = agent.get('workplace_id')
         if not workplace_id:
             return None
         try:
             workplace = db.get_workplace(workplace_id)
-            if not workplace or workplace.get('type') != 'cloud':
+            if not workplace or workplace.get('type') != 'tunnel':
                 return None
             from backend.workplaces.manager import workplace_manager
             status = workplace_manager.get_status(workplace_id)
@@ -1159,7 +1159,7 @@ class AgentRuntime:
             _logger.warning("Failed to check Evonet status for workplace=%s, letting request through", workplace_id, exc_info=True)
             return None  # if we can't determine, let it proceed normally
 
-        workplace_name = workplace.get('name', 'Cloud Workplace')
+        workplace_name = workplace.get('name', 'Tunnel Workplace')
         reply = (
             f"⚠️ **{workplace_name}** is currently offline.\n\n"
             "Connection to Evonet device lost. "
@@ -1228,7 +1228,7 @@ class AgentRuntime:
             'channel_id': ctx.channel_id,
         })
 
-        # Early rejection: if the agent has a cloud Workplace and Evonet is offline,
+        # Early rejection: if the agent has a tunnel Workplace and Evonet is offline,
         # reply immediately without hitting the LLM.
         _early_reply = self._check_evonet_offline(agent, ctx)
         if _early_reply:
@@ -1418,6 +1418,22 @@ class AgentRuntime:
                 if chan_instr:
                     messages.insert(1, {"role": "system", "content": chan_instr})
 
+        # Inject channel user identity so the agent knows who it's speaking with.
+        # This is authoritative for the session and overrides any stale remembered name.
+        # Skip if the identity was already injected (e.g. via prefetcher) to avoid
+        # piling up duplicates across turns.
+        if ctx.channel_id and not ctx.external_user_id.startswith("__agent__"):
+            _already_injected = any(
+                "## Current User" in (m.get("content") or "")
+                for m in messages[:6]
+            )
+            if not _already_injected:
+                user_id_ctx = _ctx.build_user_identity_context(
+                    ctx.channel_id, ctx.external_user_id,
+                )
+                if user_id_ctx:
+                    messages.insert(1, {"role": "system", "content": user_id_ctx})
+
         # Build tool definitions (use prefetched if available)
         if _used_prefetch:
             tools = _tools_prebuilt
@@ -1444,7 +1460,7 @@ class AgentRuntime:
                         assigned_tool_ids.append(_tid)
 
             # Resolve workspace: workplace config takes priority over agent.workspace.
-            # For cloud workplaces, never fall back to the agent's /workspace path —
+            # For tunnel workplaces, never fall back to the agent's /workspace path —
             # Evonet runs on the remote device and has its own working directory.
             _workplace_id = agent.get('workplace_id') or None
             if _workplace_id:
@@ -1452,7 +1468,7 @@ class AgentRuntime:
                     import json as _json
                     _workplace = db.get_workplace(_workplace_id)
                     _workplace_cfg = _json.loads(_workplace.get('config', '{}')) if _workplace else {}
-                    if _workplace and _workplace.get('type') == 'cloud':
+                    if _workplace and _workplace.get('type') == 'tunnel':
                         _workspace = _workplace_cfg.get('workspace_path') or None
                     else:
                         _workspace = _workplace_cfg.get('workspace_path') or agent.get('workspace') or None
@@ -1853,6 +1869,12 @@ class AgentRuntime:
         db.clear_session(session_id, agent_id=agent_id)
         self._session_skill_mds.pop(session_id, None)
         self._session_skill_tools.pop(session_id, None)
+
+    def get_session_skills(self, session_id: str) -> list[dict]:
+        """Return loaded skills for a session. Thread-safe: copies the dict before iterating."""
+        skills_data = dict(self._session_skill_tools.get(session_id, {}))
+        return [{"skill_id": sk_id, "tool_count": len(tool_defs)}
+                for sk_id, tool_defs in skills_data.items()]
 
     def send_as_bot(self, session_id: str, text: str) -> bool:
         """Admin takeover: save message as assistant and send via channel."""

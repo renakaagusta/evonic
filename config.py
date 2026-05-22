@@ -189,7 +189,7 @@ SANDBOX_MAX_CONTAINERS = _get_env_int("SANDBOX_MAX_CONTAINERS", 10, min_val=1, m
 SSH_DEFAULT_TIMEOUT = _get_env_int("SSH_DEFAULT_TIMEOUT", 30, min_val=1, max_val=3600)   # seconds per command
 SSH_IDLE_TIMEOUT = _get_env_int("SSH_IDLE_TIMEOUT", 1800, min_val=1, max_val=43200)       # 30 min idle disconnect
 
-# Cloud Workplace connector relay (WebSocket server for Evonet)
+# Tunnel Workplace connector relay (WebSocket server for Evonet)
 CONNECTOR_WS_HOST = os.getenv("CONNECTOR_WS_HOST", "0.0.0.0")
 CONNECTOR_WS_PORT = _get_env_int("CONNECTOR_WS_PORT", 8081, min_val=1024, max_val=65535)
 CONNECTOR_PING_INTERVAL = _get_env_int("CONNECTOR_PING_INTERVAL", 30, min_val=5, max_val=300)

@@ -150,14 +150,14 @@ Evonic supports three workplace types:
 |----------|-----------------------------------------------------------------------------|
 | **local**  | Runs commands directly on the Evonic server (optionally inside a Docker sandbox). |
 | **remote** | Runs commands on a remote server via SSH. Requires host, username, and authentication (password or private key). |
-| **cloud**  | Runs commands on a remote device via the **Evonet** connector — a lightweight program that connects outbound to Evonic over WebSocket (JSON-RPC). No inbound firewall rules needed. |
+| **tunnel**  | Runs commands on a remote device via the **Evonet** connector — a lightweight program that connects outbound to Evonic over WebSocket (JSON-RPC). No inbound firewall rules needed. |
 
 ### Key Points
 
 - Multiple agents can share the same workplace (e.g., several agents all working on the same server).
 - The `workspace_path` config sets the working directory for all tools executed in that workplace.
 - Local workplaces can be sandboxed inside a Docker container for isolation (`sandbox_enabled`).
-- Cloud workplaces connect and disconnect dynamically as the Evonet program starts/stops on the target device.
+- Tunnel workplaces connect and disconnect dynamically as the Evonet program starts/stops on the target device.
 - Workplace status (`connected` / `disconnected`) is tracked and surfaced via the `WorkplaceManager`.
 
 ---

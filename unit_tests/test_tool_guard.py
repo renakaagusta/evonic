@@ -149,11 +149,11 @@ class TestKanbanToolGuard:
             else:
                 sys.modules[key] = saved
 
-    def _guard(self, agent_id, tool_name, args=None, task_status='todo', autopilot=False):
+    def _guard(self, agent_id, tool_name, args=None, task_status='todo', autopilot=False, assignee=None):
         """Call _tool_guard with kanban_db.get and autopilot setting mocked."""
         import unittest.mock as mock
         task_id = self._handler._pending_tasks.get(agent_id, 'mock-task')
-        fake_task = {'id': task_id, 'status': task_status}
+        fake_task = {'id': task_id, 'status': task_status, 'assignee': assignee or agent_id}
         autopilot_value = '1' if autopilot else '0'
         with mock.patch('plugins.kanban.db.kanban_db') as mock_db, \
              mock.patch('models.db.db') as mock_db2:
@@ -347,4 +347,11 @@ class TestKanbanToolGuard:
         result = self._guard('siwa', 'bash', task_status='todo')
         assert result is not None
         assert result['block'] is True
+
+    def test_guard_self_heals_when_task_reassigned(self):
+        """If task was reassigned to another agent, clear pending and allow."""
+        self._handler._pending_tasks['siwa'] = 'task-reassigned'
+        result = self._guard('siwa', 'bash', task_status='todo', assignee='other-agent')
+        assert result is None
+        assert 'siwa' not in self._handler._pending_tasks
 

@@ -15,17 +15,17 @@ html.dark .recap-prose blockquote { border-left-color: #475569; color: #94a3b8; 
 html.dark .recap-prose code { background: #1e293b; color: #e2e8f0; }
 html.dark .recap-prose pre { background: #1e293b; }
 /* Dark mode: session list */
-html.dark #session-list .hover\\:bg-gray-50:hover { background: #1f2937; }
+html.dark #session-list .hover\\:bg-gray-50:hover { background: #374151; }
 html.dark #session-list .bg-indigo-50 { background: #1e1b4b; }
 html.dark #session-list .text-gray-800 { color: #f3f4f6; }
-html.dark #session-list .text-gray-500 { color: #9ca3af; }
-html.dark #session-list .text-gray-400 { color: #9ca3af; }
-html.dark #session-list .text-gray-300 { color: #9ca3af; }
+html.dark #session-list .text-gray-500 { color: #d1d5db; }
+html.dark #session-list .text-gray-400 { color: #cbd5e1; }
+html.dark #session-list .text-gray-300 { color: #94a3b8; }
 html.dark #session-list .text-indigo-400 { color: #818cf8; }
 html.dark #session-list .border-l-transparent { border-color: #374151; }
 html.dark #session-list .bg-red-400 { background: #f87171; }
 html.dark #mobile-dropdown { background: #1f2937; border-color: #374151; }
-html.dark #mobile-dropdown .hover\\:bg-gray-50:hover { background: #1f2937; }
+html.dark #mobile-dropdown .hover\\:bg-gray-50:hover { background: #374151; }
 html.dark #mobile-dropdown .text-gray-800 { color: #f3f4f6; }
 html.dark #mobile-dropdown .text-gray-400 { color: #9ca3af; }
 html.dark #mobile-dropdown .border-b { border-color: #374151; }
@@ -176,8 +176,10 @@ html.dark #mobile-agent-state-content .border-gray-100 { border-color: #374151 !
                                 </button>
                             </div>
                         </div>
-                        <div id="summary-content" class="flex-1 overflow-y-auto p-4">
-                            <p class="text-xs text-gray-400 italic">No summary yet.</p>
+                        <div id="SessionStateContent" class="flex-1 overflow-y-auto p-4">
+                            <div id="SessionPlan"></div>
+                            <div id="SessionSkills"></div>
+                            <div id="SessionSummary"><p class="text-xs text-gray-400 italic">No summary yet.</p></div>
                         </div>
                         <div id="summary-meta" class="hidden px-4 py-2 border-t border-gray-100 dark:border-gray-600 text-[10px] text-gray-400 flex-shrink-0"></div>
                     </div>
@@ -297,8 +299,10 @@ html.dark #mobile-agent-state-content .border-gray-100 { border-color: #374151 !
                 </button>
             </div>
         </div>
-        <div id="mobile-summary-content" class="flex-1 overflow-y-auto p-4">
-            <p class="text-xs text-gray-400 italic">No summary yet.</p>
+        <div id="mobile-SessionStateContent" class="flex-1 overflow-y-auto p-4">
+            <div id="mobile-SessionPlan"></div>
+            <div id="mobile-SessionSkills"></div>
+            <div id="mobile-SessionSummary"><p class="text-xs text-gray-400 italic">No summary yet.</p></div>
         </div>
         <div id="mobile-summary-meta" class="hidden px-4 py-2 border-t border-gray-100 dark:border-gray-600 text-[10px] text-gray-400"></div>
         <!-- Mobile Agent State -->
@@ -584,7 +588,7 @@ function renderSessionList() {
         return;
     }
     list.innerHTML = allSessions.map(s => {
-        const active = s.id === currentSessionId ? 'bg-indigo-50 border-l-2 border-l-indigo-500' : 'border-l-2 border-l-transparent hover:bg-gray-50';
+        const active = s.id === currentSessionId ? 'bg-indigo-50 dark:bg-indigo-900/40 border-l-2 border-l-indigo-500' : 'border-l-2 border-l-transparent dark:border-l-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
         const preview = s.last_message ? truncate(s.last_message, 50) : 'No messages';
         const prefixIcon = s.last_message_role === 'assistant' ? '<span class="text-indigo-400 mr-1">Bot:</span>' : '';
         const chBadge = channelBadge(s.channel_type);
@@ -1155,6 +1159,7 @@ async function sendReply(e) {
     }
     // Defensive: if the response indicates a UI clear (e.g. /clear command), clear the chat
     if (res.clear_ui) {
+        $input.val('');
         chatUI.clearContainer();
         _pendingReplyText = null;
         clearFileInput();
@@ -1247,49 +1252,49 @@ async function loadSessionSummary() {
         const data = await sumRes.json();
         const stateData = (stateRes && stateRes.ok) ? await stateRes.json() : {};
 
-        // Build mode badge + plan file + tasks header from agent state
-        let headerHtml = '';
+        // Build plan section: mode badge + plan file + tasks
+        let planHtml = '';
         if (stateData.mode) {
             const modeColor = stateData.mode === 'execute' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
-            headerHtml += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${modeColor}">${esc(stateData.mode)}</span> `;
+            planHtml += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${modeColor}">${esc(stateData.mode)}</span> `;
         }
         if (stateData.plan_file) {
-            headerHtml += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 ml-1">📋 ${esc(stateData.plan_file)}</span> `;
+            planHtml += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 ml-1">📋 ${esc(stateData.plan_file)}</span> `;
         }
         if (stateData.tasks && stateData.tasks.length > 0) {
             const icons = {pending: '\u2610', in_progress: '\u27f3', done: '\u2713'};
             const iconColors = {pending: 'text-gray-400', in_progress: 'text-amber-500', done: 'text-green-500'};
-            headerHtml += '<div class="mt-2"><div class="text-gray-500 dark:text-gray-400 font-medium mb-1 text-xs uppercase tracking-wide">Tasks</div><ul class="space-y-0.5">';
+            planHtml += '<div class="mt-2"><div class="text-gray-500 dark:text-gray-400 font-medium mb-1 text-xs uppercase tracking-wide">Tasks</div><ul class="space-y-0.5">';
             for (const t of stateData.tasks) {
                 const icon = icons[t.status] || '\u2610';
                 const color = iconColors[t.status] || 'text-gray-400';
                 const textClass = t.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200';
-                headerHtml += `<li class="flex items-start gap-1.5"><span class="${color} text-xs mt-0.5">${icon}</span><span class="${textClass} text-xs">${esc(t.text)}</span></li>`;
+                planHtml += `<li class="flex items-start gap-1.5"><span class="${color} text-xs mt-0.5">${icon}</span><span class="${textClass} text-xs">${esc(t.text)}</span></li>`;
             }
-            headerHtml += '</ul></div>';
+            planHtml += '</ul></div>';
         }
 
-        const summaryHtml = data.summary
-            ? '<div class="recap-prose">' + marked.parse(data.summary) + '</div>'
-            : null;
-        const rendered = (headerHtml || summaryHtml) ? (headerHtml && summaryHtml
-            ? `<div class="mb-3 pb-3 border-b border-gray-100 dark:border-gray-600">${headerHtml}</div>${summaryHtml}`
-            : headerHtml || summaryHtml) : null;
+        // Build skill badges section
+        const skills = Array.isArray(stateData.loaded_skills) ? stateData.loaded_skills : [];
+        const badges = _buildSkillBadges(skills);
 
         const metaText = data.summary
             ? `${data.message_count} msgs summarized` + (data.updated_at ? ` \u00b7 ${formatTime(data.updated_at)}` : '')
-            : (headerHtml ? '' : null);
+            : null;
 
-        ['' , 'mobile-'].forEach(prefix => {
-            const content = document.getElementById(prefix + 'summary-content');
+        ['', 'mobile-'].forEach(prefix => {
+            const planEl = document.getElementById(prefix + 'SessionPlan');
+            const skillsEl = document.getElementById(prefix + 'SessionSkills');
+            const summaryEl = document.getElementById(prefix + 'SessionSummary');
             const meta = document.getElementById(prefix + 'summary-meta');
-            if (!content) return;
-            if (rendered) {
-                content.innerHTML = rendered;
+            if (planEl) planEl.innerHTML = planHtml ? `<div class="mb-3 pb-3 border-b border-gray-100 dark:border-gray-600">${planHtml}</div>` : '';
+            if (skillsEl) skillsEl.innerHTML = badges.hasBadges ? '<div class="pt-2 border-t border-gray-100 dark:border-gray-600"><div class="text-gray-500 dark:text-gray-400 font-medium mb-1 text-xs uppercase tracking-wide">📜 ' + badges.count + ' Skills:</div><div class="flex flex-wrap gap-1 mb-3 pb-3 border-b border-gray-100 dark:border-gray-600">' + badges.html + '</div></div>' : '';
+            if (summaryEl && data.summary) {
+                summaryEl.innerHTML = '<div class="recap-prose">' + marked.parse(data.summary) + '</div>';
                 meta.textContent = metaText || '';
                 meta.classList.remove('hidden');
-            } else {
-                content.innerHTML = '<p class="text-xs text-gray-400 italic">No summary yet.</p>';
+            } else if (summaryEl) {
+                summaryEl.innerHTML = '<p class="text-xs text-gray-400 italic">No summary yet.</p>';
                 meta.classList.add('hidden');
             }
         });
@@ -1318,11 +1323,14 @@ async function forceRecap(btn) {
 
 function clearSummaryPanel() {
     ['', 'mobile-'].forEach(prefix => {
-        const content = document.getElementById(prefix + 'summary-content');
+        const planEl = document.getElementById(prefix + 'SessionPlan');
+        const skillsEl = document.getElementById(prefix + 'SessionSkills');
+        const summaryEl = document.getElementById(prefix + 'SessionSummary');
         const meta = document.getElementById(prefix + 'summary-meta');
-        if (!content) return;
-        content.innerHTML = '<p class="text-xs text-gray-400 italic">No summary yet.</p>';
-        meta.classList.add('hidden');
+        if (planEl) planEl.innerHTML = '';
+        if (skillsEl) skillsEl.innerHTML = '';
+        if (summaryEl) summaryEl.innerHTML = '<p class="text-xs text-gray-400 italic">No summary yet.</p>';
+        if (meta) meta.classList.add('hidden');
     });
     lastSummaryText = null;
 }
@@ -1338,6 +1346,11 @@ async function loadAgentState() {
 function clearAgentStatePanel() {
     clearAgentState(['agent-state-content', 'mobile-agent-state-content']);
 }
+
+document.addEventListener('evonic:agent-state-changed', function() {
+    loadAgentState();
+    loadSessionSummary();
+});
 
 function toggleMobileSummary() {
     const overlay = document.getElementById('mobile-summary-overlay');

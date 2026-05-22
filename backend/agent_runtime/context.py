@@ -3,6 +3,7 @@ context.py — builds LLM input: system prompt, tool list, message formatting.
 
 Pure data preparation — no LLM calls, no threading.
 """
+from __future__ import annotations
 
 import json
 import logging
@@ -98,7 +99,7 @@ def _build_portal_info(agent_id: str) -> list:
         elif backend_type == "evonet":
             lines.append(
                 f"- `/_portal/{vpath}/` → `{real_path}` "
-                f"(Evonet cloud{status_note}) — {name}"
+                f"(Evonet tunnel{status_note}) — {name}"
             )
         else:
             lines.append(
@@ -107,6 +108,25 @@ def _build_portal_info(agent_id: str) -> list:
             )
 
     return lines
+
+
+def _extract_kb_description(filepath: str) -> str | None:
+    """Parse YAML front matter in a KB file and return the `description:` value if present."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            first_line = f.readline().strip()
+            if first_line != "---":
+                return None
+            for line in f:
+                line_stripped = line.strip()
+                if line_stripped == "---":
+                    break
+                if line_stripped.startswith("description:"):
+                    val = line_stripped[len("description:"):].strip().strip("\"'")
+                    return val if val else None
+    except Exception:
+        pass
+    return None
 
 
 def _build_static_prompt(agent: Dict[str, Any]) -> str:
@@ -174,8 +194,13 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
             parts.append("\n## Available Knowledge Files")
             parts.append("You can read these files using the `read` tool:")
             for f in files:
-                size = os.path.getsize(os.path.join(kb_dir, f))
-                parts.append(f"- {f} ({size / 1024:.1f} KB)")
+                fp = os.path.join(kb_dir, f)
+                size = os.path.getsize(fp)
+                brief = _extract_kb_description(fp)
+                if brief:
+                    parts.append(f"- {f} ({size / 1024:.1f} KB) — {brief}")
+                else:
+                    parts.append(f"- {f} ({size / 1024:.1f} KB)")
             parts.append("")
             parts.append("### KB Usage")
             parts.append("- **Save**: Use `write_file` with path `/_self/kb/filename` to store a new KB file.")
@@ -410,6 +435,27 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
             prompt += (f"\n\nCurrent date/time: {now.strftime('%A')}, "
                        f"{now.strftime('%Y-%m-%d')}, {now.strftime('%H:%M:%S')} (WIB/UTC+7)")
 
+    # Dynamic enabled-agent roster for super agents.
+    # Injects a lightweight list of enabled agents (id, name, description) so the
+    # super agent can quickly identify targets for delegation via send_agent_message.
+    # Uses raw SQL to avoid loading full agent records — minimal overhead.
+    if agent.get('is_super'):
+        try:
+            with db._connect() as conn:
+                rows = conn.execute(
+                    "SELECT id, name, description FROM agents WHERE enabled = 1 ORDER BY name"
+                ).fetchall()
+            if rows:
+                lines = ["\n## Enabled Agents\n",
+                         "These agents are available for delegation via `send_agent_message`:\n"]
+                for row in rows:
+                    agent_id, agent_name, agent_desc = row
+                    desc = f" — {agent_desc}" if agent_desc else ""
+                    lines.append(f"- **{agent_id}** ({agent_name}){desc}")
+                prompt += "\n".join(lines)
+        except Exception:
+            _logger.warning("Failed to inject agent roster for super agent %s", aid, exc_info=True)
+
     # Always append the empty-response recovery instruction
     prompt += (
         "\n\n## Response Recovery Rule\n"
@@ -522,21 +568,38 @@ def build_tools(agent: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "function": tool_def['function']
                 })
 
-    # ── Patch /workspace references for non-sandbox (workplace) agents ──
-    # Tool JSON definitions contain /workspace paths in function descriptions
-    # and parameter descriptions. Workplace agents are misled into trying to
-    # use paths that don't exist on their system.
+    # ── Patch /workspace and Docker/container references for non-sandbox agents ──
+    # Tool JSON definitions contain /workspace paths and Docker/container
+    # language in function/parameter descriptions. Non-sandbox agents
+    # (workplace/remote) aren't running in Docker, so sanitize these.
     if not agent.get('sandbox_enabled'):
+        # Ordered replacements — most specific first to avoid partial matches
+        replacements = [
+            ('in an isolated Docker container', 'in an isolated execution environment'),
+            ('in a sandboxed Docker container', 'in a sandboxed execution environment'),
+            ('The container is shared', 'The environment is shared'),
+            ('The container persists', 'The environment persists'),
+            ('tears down the container', 'tears down the environment'),
+            ('tear down the container', 'tear down the environment'),
+            ('destroys the shared runpy container', 'destroys the shared runpy environment'),
+            ('local/Docker execution', 'local execution'),
+            ('/workspace', 'the agents working directory'),
+        ]
         for tool in tools:
             func = tool.get('function', {})
             # Patch function-level description
-            if 'description' in func and '/workspace' in func['description']:
-                func['description'] = func['description'].replace('/workspace', 'the agents working directory')
+            if 'description' in func:
+                desc = func['description']
+                for old, new in replacements:
+                    desc = desc.replace(old, new)
+                func['description'] = desc
             # Patch parameter descriptions
-            for param_name, param_def in func.get('parameters', {}).get('properties', {}).items():
+            for param_def in func.get('parameters', {}).get('properties', {}).values():
                 if isinstance(param_def, dict) and 'description' in param_def:
-                    if '/workspace' in param_def['description']:
-                        param_def['description'] = param_def['description'].replace('/workspace', 'the agents working directory')
+                    desc = param_def['description']
+                    for old, new in replacements:
+                        desc = desc.replace(old, new)
+                    param_def['description'] = desc
     return tools
 
 
@@ -664,3 +727,35 @@ def build_message_entry(msg: dict, agent: dict) -> dict:
         if rc:
             entry['reasoning_content'] = rc
     return entry
+
+
+def build_user_identity_context(channel_id: str, external_user_id: str):
+    """Look up the channel user's display name and build an identity context block.
+
+    Returns a string for insertion into the LLM conversation context, or None
+    when the channel has no display name on file for this user.
+    """
+    if not channel_id or not external_user_id:
+        return None
+
+    try:
+        display_name = db.get_user_display_name(channel_id, external_user_id)
+    except Exception:
+        _logger.warning(
+            "Failed to look up display name for channel=%s user=%s",
+            channel_id, external_user_id, exc_info=True,
+        )
+        return None
+
+    if not display_name or display_name == 'unknown':
+        return None
+
+    return (
+        "## Current User\n"
+        f"You are currently speaking with: **{display_name}** "
+        f"(channel user ID: `{external_user_id}`).\n"
+        "This identity is provided by the chat channel and is authoritative "
+        "for this session. If you have previously remembered a different name "
+        "for this user — disregard it. Always address this user as "
+        f"**{display_name}** throughout this conversation."
+    )

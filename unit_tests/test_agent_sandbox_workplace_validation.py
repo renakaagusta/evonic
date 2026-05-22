@@ -13,7 +13,7 @@ class TestAgentSandboxWorkplaceValidation(unittest.TestCase):
         workplaces = {
             'local-wp': {'id': 'local-wp', 'type': 'local'},
             'remote-wp': {'id': 'remote-wp', 'type': 'remote'},
-            'cloud-wp': {'id': 'cloud-wp', 'type': 'cloud'},
+            'tunnel-wp': {'id': 'tunnel-wp', 'type': 'tunnel'},
         }
         return workplaces.get(workplace_id)
 
@@ -46,10 +46,10 @@ class TestAgentSandboxWorkplaceValidation(unittest.TestCase):
         self.assertEqual(data['sandbox_enabled'], 0)
 
     @patch('routes.agents.db.get_workplace')
-    def test_cloud_workplace_forces_sandbox_off(self, mock_get):
+    def test_tunnel_workplace_forces_sandbox_off(self, mock_get):
         mock_get.side_effect = self._mock_get_workplace
         data = {'sandbox_enabled': 1}
-        _apply_sandbox_workplace_policy(data, 'cloud-wp')
+        _apply_sandbox_workplace_policy(data, 'tunnel-wp')
         self.assertEqual(data['sandbox_enabled'], 0)
 
     @patch('routes.agents.db.get_workplace')
