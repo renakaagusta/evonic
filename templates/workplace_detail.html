@@ -434,9 +434,9 @@ function loadBinaryPlatforms() {
             const filename = 'evonet-' + platform + ext;
             const dlUrl = window.location.origin + '/api/workplaces/' + HOME_ID + '/download-binary?platform=' + platform;
 
-            // Download URL (selectable text for copy-paste)
-            const urlWrapper = document.createElement('div');
-            urlWrapper.className = 'flex items-center gap-2 w-full';
+            // Single row: platform label, URL code, Copy button, Download button, filename
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2 w-full';
 
             const urlLabel = document.createElement('span');
             urlLabel.className = 'text-xs font-medium text-gray-500 dark:text-gray-400 w-36 shrink-0';
@@ -464,34 +464,27 @@ function loadBinaryPlatforms() {
                 });
             };
 
-            urlWrapper.appendChild(urlLabel);
-            urlWrapper.appendChild(urlCode);
-            urlWrapper.appendChild(copyBtn);
-
-            container.appendChild(urlWrapper);
-
-            // Download button
-            const btnRow = document.createElement('div');
-            btnRow.className = 'flex items-center gap-2';
-
             const btn = document.createElement('button');
-            btn.className = 'flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors';
+            btn.className = 'flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors shrink-0';
             btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>' +
                             'Download';
             btn.onclick = () => downloadBinary(platform, btn);
 
             const filenameLabel = document.createElement('span');
-            filenameLabel.className = 'text-xs text-gray-400 dark:text-gray-500';
+            filenameLabel.className = 'text-xs text-gray-400 dark:text-gray-500 shrink-0';
             filenameLabel.textContent = filename;
 
-            btnRow.appendChild(btn);
-            btnRow.appendChild(filenameLabel);
+            row.appendChild(urlLabel);
+            row.appendChild(urlCode);
+            row.appendChild(copyBtn);
+            row.appendChild(btn);
+            row.appendChild(filenameLabel);
 
             // Spacer between platforms
             const spacer = document.createElement('hr');
             spacer.className = 'border-gray-200 dark:border-gray-700 my-2';
 
-            container.appendChild(btnRow);
+            container.appendChild(row);
             container.appendChild(spacer);
         });
     });
