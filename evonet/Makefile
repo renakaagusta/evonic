@@ -58,6 +58,7 @@ build-gui-windows-native:
 FYNE := $(shell $(GO) env GOPATH)/bin/fyne
 build-gui-macos:
 	mkdir -p $(DIST)
+	rm -rf $(DIST)/Evonet.app
 	$(FYNE) package --target darwin --name Evonet --app-id com.evonic.evonet --icon Icon.png 2>/dev/null || \
 	$(FYNE) package --target darwin --name Evonet --app-id com.evonic.evonet
 	mv Evonet.app $(DIST)/Evonet.app
