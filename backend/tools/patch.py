@@ -20,7 +20,6 @@ except ImportError:
     import logging
     logging.getLogger(__name__).warning("safety_pipeline unavailable — safety checks disabled for patch tool")
     should_skip_safety = lambda agent: True
-
 SEARCH_WINDOW = 50
 
 

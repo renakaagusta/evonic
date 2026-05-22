@@ -15,7 +15,6 @@ except ImportError:
     logging.getLogger(__name__).warning("safety_pipeline unavailable — safety checks disabled for str_replace tool")
     should_skip_safety = lambda agent: True
 
-
 def str_replace(file_path: str, old_str: str, new_str: str, count: int = 1) -> dict:
     """
     Replace an exact string occurrence in a file.

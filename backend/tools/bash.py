@@ -62,8 +62,7 @@ def execute(agent: dict, args: dict) -> dict:
     # ------------------------------------------------------------------
     # HMADS safety check (pipeline: system rules + custom user rules)
     # ------------------------------------------------------------------
-    if get_safety_pipeline is not None and not should_skip_safety(agent) and agent.get('safety_checker_enabled', 1) and not agent.get('is_super'):
-        safety = get_safety_pipeline().check(script, tool_type='bash', agent_context=agent)
+    if get_safety_pipeline is not None and not should_skip_safety(agent) and agent.get('safety_checker_enabled', 1) and not agent.get('is_super'):        safety = get_safety_pipeline().check(script, tool_type='bash', agent_context=agent)
     else:
         safety = {'level': 'safe', 'score': 0, 'reasons': [], 'blocked_patterns': [], 'approval_info': {}}
 

@@ -14,7 +14,6 @@ except ImportError:
     import logging
     logging.getLogger(__name__).warning("safety_pipeline unavailable — safety checks disabled for write_file tool")
     should_skip_safety = lambda agent: True
-
 _STR_REPLACE_STEPS = """1. First, call read_file() to see the current content.
 2. Then call {tool} with old_str set to the exact lines you want to change (copy them from read_file's output).
 3. Set new_str to your replacement text.
