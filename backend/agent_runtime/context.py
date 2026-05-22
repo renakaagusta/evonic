@@ -456,6 +456,23 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
         except Exception:
             _logger.warning("Failed to inject agent roster for super agent %s", aid, exc_info=True)
 
+    # Evonet tunnel awareness: inform agents when they operate through a tunnel workplace
+    workplace_id = agent.get('workplace_id')
+    if workplace_id:
+        try:
+            workplace = db.get_workplace(workplace_id)
+            if workplace and workplace.get('type') == 'tunnel':
+                prompt += (
+                    "\n\n## Evonet Tunnel Workplace\n\n"
+                    "You are operating through an Evonet tunnel (WebSocket) to a remote device. "
+                    "Your tools (bash, runpy, file operations) execute on that remote device, "
+                    "not on the Evonic server. If the remote device disconnects, your tools "
+                    "will be unavailable until the Evonet connector reconnects. "
+                    "For more details, see https://evonic.dev/evonet/"
+                )
+        except Exception:
+            _logger.warning("Failed to lookup workplace for agent %s", aid, exc_info=True)
+
     # Always append the empty-response recovery instruction
     prompt += (
         "\n\n## Response Recovery Rule\n"
