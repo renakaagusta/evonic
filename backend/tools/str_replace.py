@@ -15,6 +15,28 @@ except ImportError:
     logging.getLogger(__name__).warning("safety_pipeline unavailable — safety checks disabled for str_replace tool")
     should_skip_safety = lambda agent: True
 
+def _match_with_unicode_fallback(content, old_str, new_str):
+    """Try to match old_str in content, falling back to \\uXXXX re-encoded form.
+
+    Returns (effective_old_str, effective_new_str, occurrences).
+    When the re-encoded form matches, new_str is also re-encoded to preserve
+    the file's literal-escape convention.
+    """
+    occurrences = content.count(old_str)
+    if occurrences > 0:
+        return old_str, new_str, occurrences
+
+    from backend.normalizer import reencode_unicode_escapes
+    reencoded_old = reencode_unicode_escapes(old_str)
+    if reencoded_old != old_str:
+        occurrences = content.count(reencoded_old)
+        if occurrences > 0:
+            reencoded_new = reencode_unicode_escapes(new_str)
+            return reencoded_old, reencoded_new, occurrences
+
+    return old_str, new_str, 0
+
+
 def str_replace(file_path: str, old_str: str, new_str: str, count: int = 1) -> dict:
     """
     Replace an exact string occurrence in a file.
@@ -58,7 +80,7 @@ def str_replace(file_path: str, old_str: str, new_str: str, count: int = 1) -> d
     except OSError as e:
         return {'error': str(e)}
 
-    occurrences = content.count(old_str)
+    old_str, new_str, occurrences = _match_with_unicode_fallback(content, old_str, new_str)
 
     if occurrences == 0:
         return {
@@ -184,7 +206,7 @@ def execute(agent, args: dict) -> dict:
             return {'error': read_result['error']}
 
         content = read_result['content']
-        occurrences = content.count(old_str)
+        old_str, new_str, occurrences = _match_with_unicode_fallback(content, old_str, new_str)
 
         if occurrences == 0:
             return {
@@ -233,7 +255,7 @@ def execute(agent, args: dict) -> dict:
             return {'error': result['error']}
 
         content = result['content']
-        occurrences = content.count(old_str)
+        old_str, new_str, occurrences = _match_with_unicode_fallback(content, old_str, new_str)
 
         if occurrences == 0:
             return {
@@ -358,6 +380,36 @@ def test_execute():
     r = execute({'workspace': os.path.dirname(p), 'sandbox_enabled': 0},
                 {'file_path': p, 'old_str': 'test content', 'new_str': 'replaced'})
     assert r['result'] == 'success', r
+    passed += 1
+
+    # --- Unicode escape fallback tests ---
+
+    print('Test 11: Unicode escape mismatch fallback')
+    p = make_file('items: [\\u2022 first, \\u2022 second]\n')
+    r = str_replace(p, '\u2022 first', '\u2022 replaced')
+    assert r['result'] == 'success', r
+    assert read(p) == 'items: [\\u2022 replaced, \\u2022 second]\n'
+    passed += 1
+
+    print('Test 12: Direct Unicode match (no fallback needed)')
+    p = make_file('bullet: \u2022 item\n')  # actual bullet char in file
+    r = str_replace(p, '\u2022 item', '- item')
+    assert r['result'] == 'success', r
+    assert read(p) == 'bullet: - item\n'
+    passed += 1
+
+    print('Test 13: Multiple unicode escapes in old_str')
+    p = make_file('pair: \\u00e9\\u00e8\n')
+    r = str_replace(p, '\u00e9\u00e8', 'ee')
+    assert r['result'] == 'success', r
+    assert read(p) == 'pair: ee\n'
+    passed += 1
+
+    print('Test 14: new_str re-encoded when fallback triggers')
+    p = make_file('old: \\u2022\nnext line\n')
+    r = str_replace(p, '\u2022', '\u2023')
+    assert r['result'] == 'success', r
+    assert read(p) == 'old: \\u2023\nnext line\n'
     passed += 1
 
     print(f'\nAll {passed} tests passed!')

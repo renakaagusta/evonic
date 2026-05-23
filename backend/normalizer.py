@@ -49,3 +49,39 @@ def normalize_code_quotes(text: str) -> str:
     if not text:
         return text
     return text.translate(_CODE_QUOTE_TABLE)
+
+
+# ---------------------------------------------------------------------------
+# Re-encode decoded Unicode back to literal \uXXXX escape sequences
+# ---------------------------------------------------------------------------
+# When an LLM puts \u2022 inside a JSON tool-call argument, the JSON parser
+# decodes it to the actual Unicode character (e.g. '•').  If the file on disk
+# contains the literal text \u2022 (6 ASCII characters), str_replace will fail
+# because the decoded character doesn't match the literal escape.
+#
+# This function reverses JSON's Unicode decoding: non-ASCII characters are
+# converted back to the literal \uXXXX form so they can match file content.
+
+
+def reencode_unicode_escapes(text: str) -> str:
+    """Re-encode non-ASCII characters as literal \\uXXXX escape sequences.
+
+    BMP characters (U+0080..U+FFFF) become \\uXXXX.
+    Supplementary characters (U+10000+) become surrogate pairs \\uXXXX\\uXXXX.
+    """
+    if not text:
+        return text
+    parts = []
+    for ch in text:
+        cp = ord(ch)
+        if cp > 127:
+            if cp <= 0xFFFF:
+                parts.append(f'\\u{cp:04x}')
+            else:
+                cp -= 0x10000
+                high = 0xD800 + (cp >> 10)
+                low = 0xDC00 + (cp & 0x3FF)
+                parts.append(f'\\u{high:04x}\\u{low:04x}')
+        else:
+            parts.append(ch)
+    return ''.join(parts)
