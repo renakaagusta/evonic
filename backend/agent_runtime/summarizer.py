@@ -28,6 +28,23 @@ def _current_datetime_str() -> str:
     return now.strftime('%A, %Y-%m-%d, %H:%M:%S (WIB/UTC+7)')
 
 
+def _render_prompt(template: str, replacements: Dict[str, str]) -> str:
+    """Substitute {key} placeholders with JSON-escaped values.
+
+    Uses str.replace (not str.format) so stray curly braces in the template
+    are ignored. Values are JSON-escaped (inner quotes, newlines, backslashes)
+    so the result stays valid when the template is a JSON string.
+    """
+    for key, value in replacements.items():
+        raw_placeholder = '{' + key + '}'
+        if raw_placeholder not in template:
+            continue
+        # json.dumps adds outer quotes and escapes internals; strip the quotes.
+        escaped = json.dumps(value, ensure_ascii=False)[1:-1]
+        template = template.replace(raw_placeholder, escaped)
+    return template
+
+
 DEFAULT_SUMMARIZE_PROMPT = """You are a conversation summarizer. Create a factual summary of a conversation between a user and an AI assistant.
 
 CRITICAL — CURRENT DATE/TIME: {current_datetime}
@@ -167,11 +184,11 @@ def _do_summarize_jsonl(agent: dict, session_id: str, llm_lock: threading.Lock,
         messages_text = _format_entries_for_summary(chunk)
         existing_section = f"Existing summary to update:\n{current_summary}\n" if current_summary else ""
 
-        prompt = prompt_template.format(
-            existing_summary_section=existing_section,
-            messages_text=messages_text,
-            current_datetime=_current_datetime_str()
-        )
+        prompt = _render_prompt(prompt_template, {
+            'existing_summary_section': existing_section,
+            'messages_text': messages_text,
+            'current_datetime': _current_datetime_str(),
+        })
 
         # LOCK ORDERING: llm_lock is acquired inside the summarization path,
         # always AFTER _summarize_guard (held by caller maybe_summarize).
@@ -290,11 +307,11 @@ def _do_summarize_sqlite(agent: dict, session_id: str, llm_lock: threading.Lock,
         messages_text = _format_messages_for_summary(chunk)
         existing_section = f"Existing summary to update:\n{current_summary}\n" if current_summary else ""
 
-        prompt = prompt_template.format(
-            existing_summary_section=existing_section,
-            messages_text=messages_text,
-            current_datetime=_current_datetime_str()
-        )
+        prompt = _render_prompt(prompt_template, {
+            'existing_summary_section': existing_section,
+            'messages_text': messages_text,
+            'current_datetime': _current_datetime_str(),
+        })
 
         # LOCK ORDERING: llm_lock is acquired inside the summarization path,
         # always AFTER _summarize_guard (held by caller maybe_summarize).
