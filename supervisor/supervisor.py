@@ -170,12 +170,31 @@ def get_current_release(app_root: str) -> Optional[str]:
                 # Symlink and release agree — symlink is authoritative.
                 # The app-root VERSION cache may be stale; that's fine.
                 if version_from_file and rv != version_from_file:
-                    log.warning(
-                        'current symlink says %s, release VERSION confirms '
-                        '%s, but app-root VERSION is stale (%s) — trusting '
-                        'symlink',
-                        tag, rv, version_from_file,
-                    )
+                    # Check mtime: if the app-root VERSION file was modified
+                    # MORE RECENTLY than the symlink, the symlink is stale
+                    # (e.g. server was manually updated but symlink not).
+                    # Prefer the newer VERSION file in that case.
+                    link_path = os.path.join(app_root, 'current')
+                    try:
+                        version_mtime = os.path.getmtime(version_file)
+                        link_mtime = os.path.getmtime(link_path)
+                    except OSError:
+                        version_mtime = link_mtime = 0
+                    if version_mtime > link_mtime:
+                        log.warning(
+                            'current symlink says %s but app-root VERSION=%s '
+                            'is newer (mtime %s > %s) — symlink is stale, '
+                            'trusting VERSION file',
+                            tag, version_from_file, version_mtime, link_mtime,
+                        )
+                        return None  # fall through to VERSION file
+                    else:
+                        log.warning(
+                            'current symlink says %s, release VERSION confirms '
+                            '%s, but app-root VERSION is stale (%s) — trusting '
+                            'symlink',
+                            tag, rv, version_from_file,
+                        )
                 return tag
             if version_from_file and rv != version_from_file:
                 log.warning(
