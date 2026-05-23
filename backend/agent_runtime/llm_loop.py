@@ -197,6 +197,7 @@ def run_tool_loop(agent: Dict[str, Any],
     _post_force_stop_tool_count: int = 0
     # Continuation-nudge tracker
     _continuation_nudge_count: int = 0
+    _last_nudged_content: Optional[str] = None  # content of the message that triggered a nudge
     # Message-injection scanner: hashes of already-scanned user messages (Layer A)
     _scanned_message_hashes: set = set()
     # Thinking budget cap state (Phase 2: small model efficiency)
@@ -953,6 +954,7 @@ def run_tool_loop(agent: Dict[str, Any],
                 _continuation_nudge_count += 1
                 _logger.debug("Continuation phrase detected — nudging LLM (%d/%d)",
                               _continuation_nudge_count, MAX_CONTINUATION_NUDGES)
+                _last_nudged_content = content
                 _nudge_meta = {"reasoning_content": reasoning_text} if reasoning_text else None
                 db.add_chat_message(session_id, 'assistant', content, agent_id=db_agent_id, metadata=_nudge_meta)
                 chatlog.append({'type': 'intermediate', 'session_id': session_id, 'content': content})
@@ -964,9 +966,17 @@ def run_tool_loop(agent: Dict[str, Any],
                 messages.append({"role": "user", "content": CONTINUATION_NUDGE})
                 continue
 
-            # If LLM responded with only [DONE], suppress it and treat as finished.
+            # If LLM responded with only [DONE], recover the last nudged content
+            # as the real final answer. The [DONE] itself is saved as intermediate
+            # in chatlog but the actual response is what the agent said before the nudge.
             elif content and content.strip() == "[DONE]":
-                content = ""
+                db.add_chat_message(session_id, 'assistant', "[DONE]", agent_id=db_agent_id)
+                chatlog.append({'type': 'intermediate', 'session_id': session_id, 'content': "[DONE]"})
+                if _last_nudged_content:
+                    content = _last_nudged_content
+                    _logger.info("Recovered nudged content (%d chars) as final answer for [DONE]", len(content))
+                else:
+                    content = ""
 
             # Normalize "[No response needed]" variants to empty to suppress sending
             if content and content.strip().lower().startswith("[no response"):
