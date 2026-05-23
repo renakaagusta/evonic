@@ -325,13 +325,6 @@ def check_for_update(force=False) -> dict:
     now = time.time()
     
     with _lock:
-        if not force and _state['status'] == 'available':
-            return {
-                'available': True,
-                'current': _state['current_version'],
-                'latest': _state['latest_version'],
-            }
-
         if not force and (now - _state['last_check']) < 86400:
             return {
                 'available': _state['status'] == 'available',
@@ -356,6 +349,17 @@ def check_for_update(force=False) -> dict:
         latest = sup.get_latest_release(git_root)
 
         with _lock:
+            # Do not overwrite state if an update started while we were
+            # doing network I/O (TOCTOU window between lock release at
+            # line 337 and re-acquire here).  Return fresh check result
+            # without persisting so the update's state survives.
+            if _state['status'] == 'updating':
+                return {
+                    'available': latest is not None and _version_tuple(latest) > _version_tuple(current),
+                    'current': current,
+                    'latest': latest,
+                }
+
             _state['current_version'] = current
             _state['latest_version'] = latest
             _state['last_check'] = time.time()

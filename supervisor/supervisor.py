@@ -125,10 +125,11 @@ def get_current_release(app_root: str) -> Optional[str]:
        exists **and** its ``VERSION`` agrees with the symlink target.
        ``app-root/VERSION`` is only a cache; a mismatch with the
        self-consistent symlink just means the cache is stale.
-    2. ``VERSION`` file at the app root — fallback for flat-repo /
-       development mode or when the symlink is stale.  The value is
-       normalised to match the git tag format (``v`` prefix added if
-       missing).
+    2. Git ``tag --points-at HEAD`` — catches stale VERSION files in
+       dev-mode / flat-repo setups.  Only used when ``.git`` exists.
+    3. ``VERSION`` file at the app root — fallback when neither symlink
+       nor git can resolve the version.  The value is normalised to
+       match the git tag format (``v`` prefix added if missing).
 
     If the symlink is stale (points to a release that no longer exists or
     whose version disagrees with *both* the symlink target and the
@@ -204,6 +205,23 @@ def get_current_release(app_root: str) -> Optional[str]:
             resolved = _check_symlink_tag(tag, release_dir)
             if resolved is not None:
                 return resolved
+
+    # Git fallback: use `git tag --points-at HEAD` when .git exists.
+    # This catches stale VERSION files in dev-mode / flat-repo setups
+    # where the VERSION file wasn't updated after a tag was created.
+    if os.path.isdir(os.path.join(app_root, '.git')):
+        rc, out, _ = _git(app_root, ['tag', '--points-at', 'HEAD',
+                                       '--sort=-version:refname'])
+        if rc == 0 and out:
+            git_tag = out.splitlines()[0].strip()
+            git_tag = f'v{git_tag}' if not git_tag.startswith('v') else git_tag
+            if git_tag != version_from_file:
+                log.warning(
+                    'VERSION file says %s but git tag points-at HEAD says '
+                    '%s -- using git',
+                    version_from_file, git_tag,
+                )
+            return git_tag
 
     if version_from_file is not None:
         return version_from_file
@@ -419,15 +437,19 @@ def start_daemon_from_current(app_root: str) -> tuple:
 # Git operations
 # ---------------------------------------------------------------------------
 
-def _git(app_root: str, args: list, capture: bool = True) -> tuple:
+def _git(app_root: str, args: list, capture: bool = True, timeout: int = 30) -> tuple:
     """Run git command in app_root. Returns (returncode, stdout, stderr)."""
     cmd = ['git', '-C', app_root] + args
-    result = subprocess.run(
-        cmd,
-        capture_output=capture,
-        text=True,
-    )
-    return result.returncode, result.stdout.strip(), result.stderr.strip()
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=capture,
+            text=True,
+            timeout=timeout,
+        )
+        return result.returncode, result.stdout.strip(), result.stderr.strip()
+    except subprocess.TimeoutExpired:
+        return 1, '', f'Command timed out after {timeout}s: {" ".join(cmd)}'
 
 
 def git_fetch_tags(app_root: str) -> tuple:
