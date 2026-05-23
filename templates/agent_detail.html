@@ -276,6 +276,15 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                     </div>
                 </label>
             </div>
+            <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    {{ toggle_widget(id='agent-injection-guard', checked=True) }}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Injection Guard</span>
+                        <p class="text-xs text-gray-400 mt-0.5">Detect prompt injection patterns in tool arguments. Disable if you experience false positives in code generation or file writing.</p>
+                    </div>
+                </label>
+            </div>
             <!-- HMADS: Agent-specific safety rules -->
             <div class="mb-4" id="agent-safety-rules-section">
                 <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Safety Rules (Specific)</label>
@@ -1416,6 +1425,21 @@ async function loadVariables() {
     _agentVariables.forEach(v => addVariableRow(v.key, v.value, v.is_secret));
 }
 
+async function loadInjectionGuardState() {
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/variables`);
+        const data = await res.json();
+        const vars = data.variables || [];
+        const enabledVar = vars.find(v => v.key === 'injection_guard_enabled');
+        const toggle = document.getElementById('agent-injection-guard');
+        if (toggle) {
+            toggle.checked = !enabledVar || enabledVar.value !== '0';
+        }
+    } catch (e) {
+        console.error('Failed to load injection guard state:', e);
+    }
+}
+
 let _varSaveTimer = null;
 function scheduleVarSave() {
     clearTimeout(_varSaveTimer);
@@ -1530,6 +1554,27 @@ async function saveGeneral() {
     });
     const data = await res.json();
     if (!data.success) { showToast("Failed to save settings.", "error"); return; }
+
+    // Save injection guard state as agent variable
+    try {
+        const varRes = await fetch(`/api/agents/${AGENT_ID}/variables`);
+        const varData = await varRes.json();
+        const vars = varData.variables || [];
+        const enabled = document.getElementById('agent-injection-guard').checked ? '1' : '0';
+        const existingIdx = vars.findIndex(v => v.key === 'injection_guard_enabled');
+        if (existingIdx >= 0) {
+            vars[existingIdx].value = enabled;
+        } else {
+            vars.push({ key: 'injection_guard_enabled', value: enabled, is_secret: false });
+        }
+        await fetch(`/api/agents/${AGENT_ID}/variables`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ variables: vars })
+        });
+    } catch (e) {
+        console.error('Failed to save injection guard state:', e);
+    }
 
     const selectedModelId = document.getElementById('agent-model-select').value || null;
     const selectedFallbackModelId = document.getElementById('agent-fallback-model-select').value || null;
@@ -3476,6 +3521,7 @@ async function loadAgentModelSelector() {
 }
 loadAgentModelSelector();
 loadVariables();
+loadInjectionGuardState();
 loadAgentSafetyRules();
 
 // ==================== Workplace Selector ====================
