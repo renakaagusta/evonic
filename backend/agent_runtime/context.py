@@ -280,7 +280,8 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
         f"- `/_self/SYSTEM.md` — your system prompt\n"
         f"- `/_self/kb/` — your knowledge base files\n"
         f"- `/_self/sessions/` — your session data\n"
-        f"- `/_self/plan/` — your plan files"
+        f"- `/_self/plan/` — your plan files\n"
+        f"- `/_self/artifacts/` — your artifacts directory"
     )
 
     # Inform agents about portal virtual paths configured for them
@@ -512,13 +513,14 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
                 f"Your artifacts directory is: `{artifacts_path}`\n"
                 "Files you save here will appear in the Artifacts tab on your agent detail page.\n"
                 "Use `save_artifact` tool for text files, or write files directly to this path "
-                "using `write_file` or bash/runpy for binary files (PDFs, images)."
+                "using `write_file` or bash/runpy for binary files (PDFs, images).\n"
+                "You can also access it via `/_self/artifacts/` with any file tool."
             )
         else:
             artifacts_note = (
-                "Your artifacts directory is available via the `save_artifact` tool. "
-                "You can also save files directly to your artifacts directory "
-                "using `write_file` or bash/runpy.\n"
+                "Your artifacts directory is accessible via `/_self/artifacts/` with any file tool. "
+                "You can also save files using the `save_artifact` tool or directly with "
+                "`write_file` or bash/runpy.\n"
                 "Files you save there will appear in the Artifacts tab on your agent detail page."
             )
         prompt += "\n\n## Artifacts Directory\n" + artifacts_note

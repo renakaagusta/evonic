@@ -7,6 +7,7 @@ import os
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _AGENTS_DIR = os.path.join(_BASE_DIR, 'agents')
+_SHARED_AGENTS_DIR = os.path.join(_BASE_DIR, 'shared', 'agents')
 _SELF_PREFIX = '/_self/'
 
 
@@ -22,8 +23,16 @@ def resolve_self_path(agent_id: str, file_path: str) -> Optional[str]:
     the agent's directory (path traversal / symlink attack prevention).
     """
     rel = file_path[len(_SELF_PREFIX):] if file_path.startswith(_SELF_PREFIX) else ''
-    abs_path = os.path.normpath(os.path.join(_AGENTS_DIR, agent_id, rel))
-    safe_root = os.path.realpath(os.path.join(_AGENTS_DIR, agent_id))
+
+    # /_self/artifacts/ resolves to shared/agents/<id>/artifacts/ (not agents/<id>/artifacts/)
+    if rel == 'artifacts' or rel.startswith('artifacts/'):
+        base_dir = _SHARED_AGENTS_DIR
+        safe_root = os.path.realpath(os.path.join(_SHARED_AGENTS_DIR, agent_id, 'artifacts'))
+    else:
+        base_dir = _AGENTS_DIR
+        safe_root = os.path.realpath(os.path.join(_AGENTS_DIR, agent_id))
+
+    abs_path = os.path.normpath(os.path.join(base_dir, agent_id, rel))
     resolved = os.path.realpath(abs_path)
     if not resolved.startswith(safe_root + os.sep) and resolved != safe_root:
         return None
