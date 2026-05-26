@@ -162,8 +162,16 @@ def agent_detail(agent_id):
     ws = agent.get('workspace', '').strip() if agent.get('workspace') else ''
     if not ws:
         workspace_invalid = True
-    elif not os.path.isdir(ws):
-        workspace_invalid = True
+    else:
+        # Skip local filesystem check for remote/tunnel workplaces (path is on remote host)
+        wp_id = agent.get('workplace_id', '').strip() if agent.get('workplace_id') else ''
+        is_remote_workplace = False
+        if wp_id:
+            workplace = db.get_workplace(wp_id)
+            if workplace and workplace.get('type') in ('remote', 'tunnel'):
+                is_remote_workplace = True
+        if not is_remote_workplace and not os.path.isdir(ws):
+            workspace_invalid = True
     return render_template('agent_detail.html', agent=agent,
                            DEFAULT_SUMMARIZE_PROMPT=DEFAULT_SUMMARIZE_PROMPT,
                            workspace_invalid=workspace_invalid,
