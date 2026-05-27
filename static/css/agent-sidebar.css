@@ -1,0 +1,161 @@
+/* Agent Sidebar — persistent left sidebar with agent avatars */
+
+:root {
+    --sidebar-bg: #1a1a2e;
+    --sidebar-hover: rgba(255, 255, 255, 0.08);
+    --sidebar-tooltip-bg: #1e293b;
+    --sidebar-avatar-bg: #334155;
+    --sidebar-text: #e2e8f0;
+    --sidebar-text-muted: #94a3b8;
+}
+
+html.dark {
+    --sidebar-bg: #0f172a;
+    --sidebar-hover: rgba(255, 255, 255, 0.06);
+    --sidebar-tooltip-bg: #1e293b;
+    --sidebar-avatar-bg: #334155;
+    --sidebar-text: #e2e8f0;
+    --sidebar-text-muted: #94a3b8;
+}
+
+/* ── Sidebar Container ── */
+#agent-sidebar {
+    width: 64px;
+    min-width: 64px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 40;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+#agent-sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+
+#agent-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+}
+
+/* ── Avatar Items ── */
+#agent-sidebar .agent-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+}
+
+#agent-sidebar .agent-avatar:hover {
+    transform: scale(1.12);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+}
+
+#agent-sidebar .agent-avatar span {
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* ── Busy Pulse Dot ── */
+#agent-sidebar .agent-avatar::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #f59e0b;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+#agent-sidebar .agent-avatar[data-busy="true"]::after {
+    animation: agent-busy-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes agent-busy-pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.9); }
+    50%      { opacity: 1.0; transform: scale(1.15); }
+}
+
+/* ── Tooltip ── */
+.agent-sidebar-tooltip {
+    position: fixed;
+    z-index: 9999;
+    background: var(--sidebar-tooltip-bg);
+    color: var(--sidebar-text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    min-width: 180px;
+    max-width: 260px;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.agent-sidebar-tooltip .tt-name {
+    font-weight: 700;
+    font-size: 14px;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.agent-sidebar-tooltip .tt-desc {
+    font-size: 12px;
+    color: var(--sidebar-text-muted);
+    display: block;
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.agent-sidebar-tooltip .tt-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.agent-sidebar-tooltip .tt-badge.busy {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.agent-sidebar-tooltip .tt-badge.idle {
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+}
+
+/* ── Responsive: hide sidebar on mobile ── */
+@media (max-width: 768px) {
+    #agent-sidebar {
+        display: none;
+    }
+}

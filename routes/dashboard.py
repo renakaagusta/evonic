@@ -212,3 +212,20 @@ def api_dashboard_stats():
         'leaderboard': leaderboard,
         'model_usage': model_usage,
     })
+
+
+@dashboard_bp.route('/api/dashboard/sidebar')
+def api_dashboard_sidebar():
+    """Agent sidebar data: all agents sorted by recent activity with busy status."""
+    from backend.agent_runtime import agent_runtime
+    from routes.agents import _sanitize_agents
+
+    agents = db.get_agents()
+    # Sort by last_active_at descending, nulls last
+    agents.sort(key=lambda a: (a.get('last_active_at') or ''), reverse=True)
+
+    busy_agents = agent_runtime.get_busy_agents()
+    for agent in agents:
+        agent['busy'] = agent['id'] in busy_agents
+
+    return jsonify({'agents': _sanitize_agents(agents)})
