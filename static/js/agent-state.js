@@ -4,6 +4,7 @@
    ======================================== */
 
 var _stateAgentId = null;
+var _stateSessionId = null;
 
 function esc(str) {
     if (str === null || str === undefined) return '';
@@ -29,13 +30,20 @@ function _buildSkillBadges(skills) {
         var errorClass = isError ? ' border border-yellow-400 dark:border-yellow-500' : '';
         var tooltip = isError ? 'Skill error: failed to load metadata' : (s.tool_count ? s.tool_count + ' tools' : '');
         parts.push(
-            '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium' +
-            ' bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 ml-1' +
+            '<span class="skill-badge inline-flex items-center px-2 py-0.5 rounded text-xs font-medium' +
+            ' bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 ml-1 group' +
             errorClass +
             '" style="transition: opacity 0.15s ease"' +
             (tooltip ? ' title="' + esc(tooltip) + '"' : '') +
-            '>' +
+            ' data-skill-id="' + esc(s.skill_id) + '">' +
             esc(s.name) +
+            '<button onclick="event.stopPropagation();_unloadSkill(\'' + esc(s.skill_id) + '\')"' +
+            ' class="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full' +
+            ' opacity-0 group-hover:opacity-100' +
+            ' bg-gray-300 hover:bg-red-300 dark:bg-gray-600 dark:hover:bg-red-600' +
+            ' text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-300' +
+            ' transition-all cursor-pointer"' +
+            ' title="Unload skill">\u00d7</button>' +
             '</span>'
         );
     }
@@ -58,13 +66,20 @@ function _buildSkillBadges(skills) {
             var hsErrorClass = hsError ? ' border border-yellow-400 dark:border-yellow-500' : '';
             var hsTooltip = hsError ? 'Skill error: failed to load metadata' : (hs.tool_count ? hs.tool_count + ' tools' : '');
             parts.push(
-                '<span class="skill-badge-hidden hidden inline-flex items-center px-2 py-0.5 rounded text-xs font-medium' +
-                ' bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 ml-1' +
+                '<span class="skill-badge-hidden skill-badge hidden inline-flex items-center px-2 py-0.5 rounded text-xs font-medium' +
+                ' bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 ml-1 group' +
                 hsErrorClass +
                 '" style="transition: opacity 0.15s ease"' +
                 (hsTooltip ? ' title="' + esc(hsTooltip) + '"' : '') +
-                '>' +
+                ' data-skill-id="' + esc(hs.skill_id) + '">' +
                 esc(hs.name) +
+                '<button onclick="event.stopPropagation();_unloadSkill(\'' + esc(hs.skill_id) + '\')"' +
+                ' class="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full' +
+                ' opacity-0 group-hover:opacity-100' +
+                ' bg-gray-300 hover:bg-red-300 dark:bg-gray-600 dark:hover:bg-red-600' +
+                ' text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-300' +
+                ' transition-all cursor-pointer"' +
+                ' title="Unload skill">\u00d7</button>' +
                 '</span>'
             );
         }
@@ -158,6 +173,7 @@ function _renderAgentStateCore(containerIds, data) {
 async function renderAgentState(agentId, userId, containerIds, sessionId) {
     if (!agentId) return;
     _stateAgentId = agentId;
+    _stateSessionId = sessionId || null;
     try {
         var url = '/api/agents/' + agentId + '/chat/state?user_id=' + encodeURIComponent(userId || 'web_test');
         if (sessionId) url += '&session_id=' + encodeURIComponent(sessionId);
@@ -188,4 +204,22 @@ function _resetActiveModel() {
             }
         })
         .catch(function(e) { console.error('[AgentState] Reset error:', e); });
+}
+
+function _unloadSkill(skillId) {
+    if (!_stateAgentId || !_stateSessionId) {
+        console.warn('[AgentState] No agent/session ID for skill unload');
+        return;
+    }
+    var url = '/api/agents/' + _stateAgentId + '/skills/' + encodeURIComponent(skillId) + '/unload?session_id=' + encodeURIComponent(_stateSessionId);
+    fetch(url, { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                document.dispatchEvent(new CustomEvent('evonic:agent-state-changed'));
+            } else {
+                console.warn('[AgentState] Skill unload failed:', data.error || data.result);
+            }
+        })
+        .catch(function(e) { console.error('[AgentState] Skill unload error:', e); });
 }

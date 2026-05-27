@@ -1290,6 +1290,29 @@ def api_chat_agent_state(agent_id):
     return jsonify({'mode': None, 'active_model': None, 'loaded_skills': loaded_skills})
 
 
+@agents_bp.route('/api/agents/<agent_id>/skills/<skill_id>/unload', methods=['POST'])
+def api_unload_agent_skill(agent_id, skill_id):
+    """Unload a lazy-loaded skill from the agent's current session."""
+    from backend.agent_runtime import agent_runtime
+
+    agent = db.get_agent(agent_id)
+    if not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+
+    session_id = request.args.get('session_id', '').strip()
+    if not session_id:
+        return jsonify({'error': 'session_id is required'}), 400
+
+    removed = agent_runtime.remove_session_skill(session_id, skill_id)
+    if not removed:
+        return jsonify({'result': f'Skill "{skill_id}" was not loaded in this session.'})
+
+    return jsonify({
+        'success': True,
+        'result': f'Skill "{skill_id}" has been unloaded from the session.'
+    })
+
+
 @agents_bp.route('/api/agents/<agent_id>/plan-file', methods=['GET'])
 def api_agent_plan_file(agent_id):
     """Return the rendered plan file content for an agent.

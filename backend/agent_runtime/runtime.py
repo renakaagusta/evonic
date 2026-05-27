@@ -1870,6 +1870,17 @@ class AgentRuntime:
         self._session_skill_mds.pop(session_id, None)
         self._session_skill_tools.pop(session_id, None)
 
+    def remove_session_skill(self, session_id: str, skill_id: str) -> bool:
+        """Remove a skill from a session (both tools and MD context). Thread-safe."""
+        removed = False
+        if session_id in self._session_skill_tools and skill_id in self._session_skill_tools[session_id]:
+            del self._session_skill_tools[session_id][skill_id]
+            removed = True
+        if session_id in self._session_skill_mds and skill_id in self._session_skill_mds[session_id]:
+            del self._session_skill_mds[session_id][skill_id]
+            removed = True
+        return removed
+
     def get_session_skills(self, session_id: str) -> list[dict]:
         """Return loaded skills for a session. Thread-safe: copies the dict before iterating."""
         skills_data = dict(self._session_skill_tools.get(session_id, {}))
