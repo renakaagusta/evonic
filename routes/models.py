@@ -308,3 +308,33 @@ def api_set_agent_model(agent_id):
             return jsonify({"success": False, "error": "Failed to set fallback model"}), 400
 
     return jsonify({"success": True})
+
+
+@models_bp.route("/api/agents/<agent_id>/model/reset", methods=["POST"])
+def api_reset_agent_active_model(agent_id):
+    """Reset the agent's active fallback model, returning to the primary model."""
+    import json as _json
+
+    agent = db.get_agent(agent_id)
+    if not agent:
+        return jsonify({"error": "Agent not found"}), 404
+
+    raw = db.get_agent_state(agent_id=agent_id)
+    if not raw:
+        return jsonify({"result": "No agent state found — nothing to reset."})
+
+    try:
+        data = _json.loads(raw)
+    except _json.JSONDecodeError:
+        return jsonify({"error": "Failed to parse agent state"}), 500
+
+    if "active_fallback_model_id" not in data:
+        return jsonify({"result": "No active fallback model to reset."})
+
+    fb_id = data.pop("active_fallback_model_id", None)
+    db.upsert_agent_state(_json.dumps(data), agent_id=agent_id)
+
+    return jsonify({
+        "success": True,
+        "result": f"Fallback model ({fb_id}) has been cleared. The agent will use its primary model on the next turn."
+    })

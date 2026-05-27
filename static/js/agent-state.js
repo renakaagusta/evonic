@@ -3,6 +3,8 @@
    Shared by agent_detail.html & sessions.html
    ======================================== */
 
+var _stateAgentId = null;
+
 function esc(str) {
     if (str === null || str === undefined) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -100,7 +102,9 @@ function _renderAgentStateCore(containerIds, data) {
     if (data.active_model) {
         var am = data.active_model;
         if (am.is_fallback) {
-            cards += '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 ml-1" title="Using fallback model due to primary failure">Model: ' + esc(am.name) + ' <span class="ml-1 text-[10px] opacity-75">(fallback)</span></span>';
+            cards += '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 ml-1" title="Using fallback model due to primary failure">Model: ' + esc(am.name) + ' <span class="ml-1 text-[10px] opacity-75">(fallback)</span>' +
+                '<button onclick="event.stopPropagation();_resetActiveModel()" class="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-200 hover:bg-red-200 dark:bg-amber-700 dark:hover:bg-red-700 text-amber-600 hover:text-red-600 dark:text-amber-300 dark:hover:text-red-300 transition-colors cursor-pointer" title="Reset to primary model">\u00d7</button>' +
+                '</span>';
         } else {
             cards += '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 ml-1">Model: ' + esc(am.name) + '</span>';
         }
@@ -153,6 +157,7 @@ function _renderAgentStateCore(containerIds, data) {
  */
 async function renderAgentState(agentId, userId, containerIds, sessionId) {
     if (!agentId) return;
+    _stateAgentId = agentId;
     try {
         var url = '/api/agents/' + agentId + '/chat/state?user_id=' + encodeURIComponent(userId || 'web_test');
         if (sessionId) url += '&session_id=' + encodeURIComponent(sessionId);
@@ -169,4 +174,18 @@ function clearAgentState(containerIds) {
         var el = document.getElementById(id);
         if (el) el.innerHTML = empty;
     });
+}
+
+function _resetActiveModel() {
+    if (!_stateAgentId) { console.warn('[AgentState] No agent ID for reset'); return; }
+    fetch('/api/agents/' + _stateAgentId + '/model/reset', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                document.dispatchEvent(new CustomEvent('evonic:agent-state-changed'));
+            } else {
+                console.warn('[AgentState] Reset failed:', data.error || data.result);
+            }
+        })
+        .catch(function(e) { console.error('[AgentState] Reset error:', e); });
 }
