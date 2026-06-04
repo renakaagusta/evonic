@@ -1,0 +1,9 @@
+{
+  "id": "meridian-workspace",
+  "name": "Meridian Workspace",
+  "version": "1.0.0",
+  "description": "Cross-agent shared memory for the Meridian trading agents. Use workspace_set to publish facts (deploy context, pool watchlist, post-mortems) and workspace_get/list to read them. Backed by Evonic's meridian_shared_memory table — Meridian itself stays stateless.",
+  "author": "internal",
+  "tools_file": "tools.json",
+  "variables": []
+}

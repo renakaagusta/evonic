@@ -1,0 +1,63 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "workspace_set",
+      "description": "Store a fact in the shared Meridian workspace so other agents (Scout, Argus, Helm, Verity, Sage, Atlas) can read it. Use to publish deploy reasoning, post-deploy concerns, post-mortem outcomes, smart-wallets to watch. Always namespace keys with a prefix: 'deploy:<position_address>', 'watch:<pool_address>', 'postmortem:<position_address>', 'lesson:<topic>'. Overwrites existing key. Pass ttl_seconds to auto-expire (e.g. 604800 for 7 days).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "key": {"type": "string", "description": "Namespaced key, e.g. 'deploy:3PtFskEjwVt'. Use ':' to separate scope from id."},
+          "value": {"type": "string", "description": "Value. For structured data, pass a JSON-stringified object."},
+          "category": {"type": "string", "description": "Optional category tag for filtering, e.g. 'deploy_context', 'watchlist', 'post_mortem', 'lesson'."},
+          "ttl_seconds": {"type": "number", "description": "Optional TTL in seconds. Defaults to no expiry. Use 604800 for 7 days, 86400 for 1 day."}
+        },
+        "required": ["key", "value"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "workspace_get",
+      "description": "Read a single fact by exact key from the shared Meridian workspace. Returns null if missing or expired. Use 'deploy:<position_address>' to fetch the deploy context for a specific position you are managing.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "key": {"type": "string", "description": "Exact key, e.g. 'deploy:3PtFskEjwVt'."}
+        },
+        "required": ["key"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "workspace_list",
+      "description": "List facts from the shared Meridian workspace, optionally filtered by category or key prefix. Use to scan all open deploy contexts ('deploy:*'), all pools on watchlist, or all recent post-mortems. Returns up to 50 entries by default, newest first.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "category": {"type": "string", "description": "Optional category filter, e.g. 'deploy_context'."},
+          "key_prefix": {"type": "string", "description": "Optional key prefix filter, e.g. 'deploy:'."},
+          "limit": {"type": "number", "description": "Max entries to return. Default 50."}
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "workspace_delete",
+      "description": "Remove a fact from the shared workspace. Use to clear a deploy_context after the position closes, or to retract a stale watch entry. Returns whether anything was deleted.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "key": {"type": "string", "description": "Exact key to delete."}
+        },
+        "required": ["key"]
+      }
+    }
+  }
+]
