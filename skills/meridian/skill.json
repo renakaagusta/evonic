@@ -1,0 +1,9 @@
+{
+  "id": "meridian",
+  "name": "Meridian DLMM",
+  "version": "0.1.0",
+  "description": "Bridge to Meridian Solana/Meteora DLMM tools via subprocess to /root/meridian/cli.js",
+  "author": "internal",
+  "tools_file": "tools.json",
+  "variables": []
+}
