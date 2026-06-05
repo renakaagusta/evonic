@@ -28,5 +28,5 @@ def _purge_expired(con: sqlite3.Connection) -> None:
     """Best-effort: delete rows whose expires_at is in the past."""
     con.execute(
         "DELETE FROM meridian_shared_memory "
-        "WHERE expires_at IS NOT NULL AND expires_at < datetime('now')"
+        "WHERE expires_at IS NOT NULL AND expires_at < datetime('now') AND key NOT LIKE 'trade:%'"
     )
