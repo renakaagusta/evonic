@@ -32,9 +32,11 @@ Before any research, call `workspace_list(key_prefix="dlmm_verdict:")` and check
 - `created_at` within the last 24 hours
 - `verdict` is `VETO` with `confidence >= 0.80`
 
-If found → **auto-VETO** at confidence 0.85 with reason citing Argus's verdict + your independent check. Example: `"Cross-stack VETO — Argus VETO'd same mint 6h ago at 0.88 for distribution-pattern signals (LPs withdrawing, traders -50%). The momentum-trade thesis also dies on those same signals; not paying for a second confirmation."`
+If found, **only auto-VETO when Argus's veto reason is a TRADE-relevant danger signal** — i.e. it names a rug / distribution / dumping / collapse pattern (e.g. "LPs withdrawing", "creator dumped", "rugcheck", "bot/insider concentration", "price collapsing", "traders -50%", "volume dying"). Then auto-VETO at confidence 0.85 citing it.
 
-The DLMM stack (Argus) sees red flags from the LP-economics angle. Those same red flags kill spot-momentum theses. Don't waste a research round when their VETO already says no.
+**Do NOT inherit an Argus VETO that is purely LP-economics** — e.g. "low fee/TVL ratio", "fee yield too thin", "impermanent-loss risk", "range drifted", "pool drained of TVL", "not enough fees to cover IL". A pool can be a bad LP fee-farm yet a perfectly good short-momentum spot trade (a fresh token pumping has thin/volatile LP economics but real upside). When Argus's reason is LP-economics only, **ignore it and run your own research** as usual.
+
+The DLMM stack (Argus) judges from an LP fee-yield angle. Its *rug/distribution* flags also kill spot theses (inherit those); its *LP-economics* flags do not (ignore those).
 
 Override allowed only when something dramatically changed since their veto — e.g., new catalyst confirmed by `get_dex_velocity` showing 5m volume surge after Argus's verdict timestamp. State the catalyst explicitly.
 
