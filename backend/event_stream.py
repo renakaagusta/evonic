@@ -136,3 +136,51 @@ class EventStream:
 
 
 event_stream = EventStream()
+
+
+# ── Swarmscope mirror (additive, observation-only) ──────────────────────────
+# One listener turns every agent turn into a swarmscope span (reasoning + tool
+# steps) under a per-session trace, plus a real-name heartbeat — so the swarm
+# play-by-play is real, not synthesized. Runs in the event bus thread pool
+# (already exception-safe + non-blocking); each request is timeout-guarded.
+def _swarmscope_turn_listener(data: dict) -> None:
+    url = os.getenv("SWARMSCOPE_URL", "")
+    key = os.getenv("SWARMSCOPE_KEY", "")
+    if not url or not key:
+        return
+    try:
+        import requests
+        agent = data.get("agent_name") or data.get("agent_id") or "agent"
+        sid = data.get("session_id") or ""
+        resp = data.get("response") or ""
+        tools = data.get("tool_trace") or []
+        is_err = bool(data.get("is_error"))
+        tid = f"evo:{sid}" if sid else f"evo:{agent}"
+        hdr = {"x-api-key": key}
+        tool_names = []
+        for t in (tools or [])[:30]:
+            if isinstance(t, dict):
+                tool_names.append(t.get("tool") or t.get("name") or t.get("function") or "tool")
+            else:
+                tool_names.append(str(t)[:40])
+        requests.post(f"{url}/v1/traces", timeout=2.5, headers=hdr, json={
+            "trace_id": tid, "root_agent": agent, "kind": "agent-session",
+            "status": "error" if is_err else "ok",
+            "summary": (resp[:140] if resp else f"{agent} turn"),
+        })
+        requests.post(f"{url}/v1/spans", timeout=2.5, headers=hdr, json={
+            "trace_id": tid, "agent": agent, "type": "llm", "name": "turn",
+            "status": "error" if is_err else "ok",
+            "output": {"reasoning": resp[:4000], "tools": tool_names},
+        })
+        requests.post(f"{url}/v1/agents/heartbeat", timeout=2.5, headers=hdr, json={
+            "name": agent, "role": "worker", "status": "online",
+        })
+    except Exception:
+        pass
+
+
+try:
+    event_stream.on("turn_complete", _swarmscope_turn_listener)
+except Exception:
+    pass

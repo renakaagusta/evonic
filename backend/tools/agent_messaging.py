@@ -18,6 +18,8 @@ Guard rails:
 """
 
 import json
+import os
+import threading
 import time
 import uuid
 from collections import defaultdict
@@ -26,6 +28,30 @@ from typing import Any, Callable, Dict, List
 from backend.agent_state import AgentState
 from backend.logging_config import get_logger
 from models.db import db
+
+
+# ── Swarmscope mirror (additive, fire-and-forget) ───────────────────────────
+# Observation only — copies A2A messages + agent liveness to the swarmscope
+# observability service in a daemon thread. Never blocks or raises into the
+# agent path; if env is unset or the service is down, it's a silent no-op.
+def _swarmscope_emit(path: str, body: dict) -> None:
+    url = os.getenv("SWARMSCOPE_URL", "")
+    key = os.getenv("SWARMSCOPE_KEY", "")
+    if not url or not key:
+        return
+
+    def _post() -> None:
+        try:
+            import requests
+            requests.post(f"{url}{path}", json=body,
+                          headers={"x-api-key": key}, timeout=2.5)
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_post, daemon=True).start()
+    except Exception:
+        pass
 
 _logger = get_logger(__name__)
 
@@ -386,6 +412,20 @@ def _exec_send_agent_message(args: dict, agent_context: dict) -> dict:
             'detail': result,
         }
 
+    # ── Swarmscope mirror: A2A message + real-name heartbeats for both agents ──
+    try:
+        _t_name = target_agent.get('name', target_id)
+        _swarmscope_emit("/v1/messages", {
+            "from_agent": sender_name,
+            "to_agent": _t_name,
+            "intent": "a2a",
+            "content": message,
+        })
+        _swarmscope_emit("/v1/agents/heartbeat", {"name": sender_name, "role": "meta", "status": "online"})
+        _swarmscope_emit("/v1/agents/heartbeat", {"name": _t_name, "role": "meta", "status": "online"})
+    except Exception:
+        pass
+
     return {
         'success': True,
         'message': f"Message sent to {target_agent.get('name', target_id)}.",
@@ -406,8 +446,20 @@ def _exec_escalate_to_user(args: dict, agent_context: dict) -> dict:
         _logger.debug("Agent '%s' already in user session — escalate skipped.", agent_id)
         return {'error': 'Already in a user session — use send_agent_message or reply directly.'}
 
-    # Priority 1: send to the primary session (prefers channel sessions like Telegram)
-    primary_session = db.get_latest_human_session(agent_id)
+    # Priority 0: the originating human session threaded through the A2A chain.
+    # Routes the escalation back to the chat the human actually used instead of
+    # the agent's latest/most-active session (often a shared group).
+    _report_to_id = agent_context.get('report_to_id', '') or ''
+    _report_to_channel_id = agent_context.get('report_to_channel_id', '') or ''
+    primary_session = None
+    if _report_to_id and not _report_to_id.startswith('__agent__'):
+        primary_session = {
+            'external_user_id': _report_to_id,
+            'channel_id': _report_to_channel_id or None,
+        }
+    # Priority 1: fall back to the agent's latest human session.
+    if not primary_session:
+        primary_session = db.get_latest_human_session(agent_id)
     if not primary_session:
         _logger.warning("Escalate failed: no human session found for agent '%s'.", agent_id)
         return {'error': 'No active human user session found for this agent.'}
