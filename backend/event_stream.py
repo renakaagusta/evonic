@@ -140,41 +140,144 @@ event_stream = EventStream()
 
 # ── Swarmscope mirror (additive, observation-only) ──────────────────────────
 # One listener turns every agent turn into a swarmscope span (reasoning + tool
-# steps) under a per-session trace, plus a real-name heartbeat — so the swarm
-# play-by-play is real, not synthesized. Runs in the event bus thread pool
-# (already exception-safe + non-blocking); each request is timeout-guarded.
+# steps) under a per-session trace, plus a real-name heartbeat (with avatar) —
+# so the swarm play-by-play is real, not synthesized. Data is partitioned by
+# STACK (namespace): trader agents -> meme stack, the rest -> LP stack.
+# Runs in the event-bus thread pool (exception-safe + non-blocking); each
+# request is timeout-guarded. Uses the swarmscope ADMIN key so the per-agent
+# namespace override is honored.
+import base64 as _b64
+
+_AV_CACHE: dict = {}
+
+
+def swarmscope_ns_for(agent_id: str) -> str:
+    """Stack -> namespace. Trader agents are the meme-trading stack."""
+    return "meridian-meme" if "trader" in (agent_id or "") else "meridian-dlmm"
+
+
+def swarmscope_avatar(agent_id: str):
+    """Agent avatar as a base64 data-URL (cached per process). None if absent."""
+    if not agent_id:
+        return None
+    if agent_id in _AV_CACHE:
+        return _AV_CACHE[agent_id]
+    data = None
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(root, "shared", "avatars", agent_id, "avatar.png")
+        if os.path.isfile(path) and os.path.getsize(path) < 2_000_000:
+            with open(path, "rb") as f:
+                raw = f.read()
+            mime = "image/png" if raw[:8] == b"\x89PNG\r\n\x1a\n" else ("image/jpeg" if raw[:2] == b"\xff\xd8" else "image/png")
+            data = f"data:{mime};base64," + _b64.b64encode(raw).decode("ascii")
+    except Exception:
+        data = None
+    _AV_CACHE[agent_id] = data
+    return data
+
+
+# Tool name (substring) -> verdict word. Action tools outrank read-only ones,
+# so a turn that both screened AND deployed reads as "deploy". Applies to every
+# agent in both stacks (LP + meme), not just the screeners.
+_SWARMSCOPE_VERDICT = {
+    "deploy_position": "deploy", "open_position": "deploy", "add_liquidity": "deploy",
+    "close_position": "close", "remove_liquidity": "close", "claim_fees": "claim",
+    "swap_token": "swap", "buy": "buy", "sell": "sell", "rebalance": "rebalance",
+    "send_agent_message": "handoff", "set_position_note": "note", "update_config": "config",
+}
+
+
+def _swarmscope_verdict(tool_names, tools_present, is_err):
+    """One-word verdict for a turn, derived from the tools it actually called."""
+    if is_err:
+        return "error"
+    verdict = None
+    for name in tool_names:
+        low = str(name).lower()
+        for key, v in _SWARMSCOPE_VERDICT.items():
+            if key in low:
+                verdict = v  # last matching action wins
+    if verdict:
+        return verdict
+    return "analyze" if tools_present else "hold"
+
+
 def _swarmscope_turn_listener(data: dict) -> None:
+    """Turn every agent turn into an inspectable decision cycle: verdict (what) +
+    reasoning (why) + tool steps (how). Additive, fire-and-forget, per-turn trace
+    so each decision is its own cycle. Covers all agents across both stacks."""
     url = os.getenv("SWARMSCOPE_URL", "")
     key = os.getenv("SWARMSCOPE_KEY", "")
     if not url or not key:
         return
     try:
         import requests
-        agent = data.get("agent_name") or data.get("agent_id") or "agent"
+        import time as _time
+        agent_id = data.get("agent_id") or ""
+        agent = data.get("agent_name") or agent_id or "agent"
         sid = data.get("session_id") or ""
-        resp = data.get("response") or ""
+        resp = (data.get("response") or "").strip()
         tools = data.get("tool_trace") or []
         is_err = bool(data.get("is_error"))
-        tid = f"evo:{sid}" if sid else f"evo:{agent}"
+        # Skip trivial turns (no work + nothing said) so the funnel stays meaningful.
+        if not tools and len(resp) < 80 and not is_err:
+            return
+        ns = swarmscope_ns_for(agent_id)
         hdr = {"x-api-key": key}
-        tool_names = []
-        for t in (tools or [])[:30]:
+
+        # Normalise tool_trace items (dicts or strings) -> name + optional args/result.
+        tool_objs = []
+        for t in (tools or [])[:14]:
             if isinstance(t, dict):
-                tool_names.append(t.get("tool") or t.get("name") or t.get("function") or "tool")
+                tool_objs.append({
+                    "name": t.get("tool") or t.get("name") or t.get("function") or "tool",
+                    "args": t.get("args") if t.get("args") is not None else (t.get("input") if t.get("input") is not None else t.get("arguments")),
+                    "result": t.get("result") if t.get("result") is not None else t.get("output"),
+                })
             else:
-                tool_names.append(str(t)[:40])
-        requests.post(f"{url}/v1/traces", timeout=2.5, headers=hdr, json={
-            "trace_id": tid, "root_agent": agent, "kind": "agent-session",
-            "status": "error" if is_err else "ok",
-            "summary": (resp[:140] if resp else f"{agent} turn"),
-        })
-        requests.post(f"{url}/v1/spans", timeout=2.5, headers=hdr, json={
-            "trace_id": tid, "agent": agent, "type": "llm", "name": "turn",
-            "status": "error" if is_err else "ok",
-            "output": {"reasoning": resp[:4000], "tools": tool_names},
-        })
+                tool_objs.append({"name": str(t)[:40], "args": None, "result": None})
+        tool_names = [t["name"] for t in tool_objs]
+        verdict = _swarmscope_verdict(tool_names, bool(tools), is_err)
+
+        # One trace per turn -> each agent decision is its own cycle in the funnel.
+        ts_ms = int(_time.time() * 1000)
+        tid = f"evo:{sid or agent}:{ts_ms}"
+        first_line = resp.split("\n", 1)[0].strip()
+        if first_line:
+            summary = f"{verdict} · {first_line[:96]}"
+        elif tool_names:
+            summary = f"{verdict} · {len(tool_names)} tool{'s' if len(tool_names) != 1 else ''}"
+        else:
+            summary = verdict
+
+        dec = {
+            "namespace": ns, "trace_id": tid, "agent": agent, "kind": "agent-turn",
+            "decision_type": verdict, "summary": summary[:140],
+            "reasoning": resp[:4000],
+            "context": {"tools": tool_names, "thinking_s": data.get("thinking_duration")},
+        }
+        if is_err:
+            dec["error"] = "turn error"
+        requests.post(f"{url}/v1/decisions", timeout=2.5, headers=hdr, json=dec)
+
+        # Tool calls as ordered spans so the Execution timeline shows the HOW.
+        for i, t in enumerate(tool_objs):
+            started = _time.strftime("%Y-%m-%dT%H:%M:%S", _time.gmtime((ts_ms + i * 1000) / 1000)) + "Z"
+            out = {}
+            if t["args"] is not None:
+                out["args"] = str(t["args"])[:300]
+            if t["result"] is not None:
+                out["result"] = str(t["result"])[:300]
+            requests.post(f"{url}/v1/spans", timeout=2.5, headers=hdr, json={
+                "namespace": ns, "trace_id": tid, "agent": agent, "type": "tool",
+                "name": t["name"], "status": "ok", "started_at": started,
+                "output": (out or None),
+            })
+
         requests.post(f"{url}/v1/agents/heartbeat", timeout=2.5, headers=hdr, json={
-            "name": agent, "role": "worker", "status": "online",
+            "namespace": ns, "name": agent, "role": "worker", "status": "online",
+            "attributes": {"agent_id": agent_id, "stack": ns, "avatar": swarmscope_avatar(agent_id)},
         })
     except Exception:
         pass
@@ -182,5 +285,45 @@ def _swarmscope_turn_listener(data: dict) -> None:
 
 try:
     event_stream.on("turn_complete", _swarmscope_turn_listener)
+except Exception:
+    pass
+
+
+# ── Roster sweep: register the FULL agent roster (not just active ones) ───────
+# Every agent acts only occasionally, so on-activity heartbeats leave the
+# registry sparse (esp. idle stacks). This daemon periodically heartbeats every
+# configured agent with its real status + avatar, partitioned by stack.
+def _swarmscope_roster_sweep() -> None:
+    import time
+    time.sleep(25)  # let the app + DB finish starting
+    while True:
+        url = os.getenv("SWARMSCOPE_URL", "")
+        key = os.getenv("SWARMSCOPE_KEY", "")
+        if url and key:
+            try:
+                import requests
+                from models.db import db
+                for a in (db.get_agents() or []):
+                    aid = a.get("id") or ""
+                    if not aid:
+                        continue
+                    name = a.get("name") or aid
+                    ns = swarmscope_ns_for(aid)
+                    status = "online" if a.get("enabled", 1) else "offline"
+                    try:
+                        requests.post(f"{url}/v1/agents/heartbeat", timeout=2.5,
+                                      headers={"x-api-key": key}, json={
+                                          "namespace": ns, "name": name, "role": "worker", "status": status,
+                                          "attributes": {"agent_id": aid, "stack": ns, "avatar": swarmscope_avatar(aid)},
+                                      })
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        time.sleep(300)
+
+
+try:
+    threading.Thread(target=_swarmscope_roster_sweep, daemon=True).start()
 except Exception:
     pass
