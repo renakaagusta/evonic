@@ -386,7 +386,7 @@ class ChatLog:
             collected.reverse()
             raw_entries = collected
 
-        return _reconstruct_llm_messages(raw_entries)
+        return _elide_stale_tool_outputs(_reconstruct_llm_messages(raw_entries))
 
     def clear(self) -> None:
         """Truncate the session log file, removing all entries."""
@@ -621,6 +621,41 @@ def _drop_orphaned_tool_messages(msgs: List[Dict[str, Any]]) -> List[Dict[str, A
             responded_ids.add(tcid)
         result.append(msg)
     return result
+
+
+# Tool outputs from earlier turns are point-in-time data (e.g. screening
+# candidate dumps, balances, holder lists) that the agent has already acted on.
+# Carrying their full content forward bloats the context window without value
+# and can blow past the model's limit (a single get_top_candidates result is
+# 30-60 KB).  Elide large tool outputs from all but the most recent turns,
+# keeping the tool message — and crucially its tool_call_id — so the
+# tool / tool_calls pairing the API requires stays intact.
+_KEEP_TOOL_OUTPUT_TURNS = 2          # keep full tool output for the last N user turns
+_MAX_STALE_TOOL_OUTPUT_CHARS = 2000  # only elide tool outputs larger than this
+
+
+def _elide_stale_tool_outputs(msgs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Replace the body of large, stale tool outputs with a short stub.
+
+    "Stale" = belonging to a turn older than the last ``_KEEP_TOOL_OUTPUT_TURNS``
+    user turns.  The most recent turns are left untouched so the agent still
+    sees the data it is currently acting on.  tool_call_id and role are
+    preserved, so the assistant(tool_calls) -> tool pairing remains valid.
+    """
+    user_idxs = [i for i, m in enumerate(msgs) if m.get('role') == 'user']
+    if len(user_idxs) <= _KEEP_TOOL_OUTPUT_TURNS:
+        return msgs
+    cutoff = user_idxs[-_KEEP_TOOL_OUTPUT_TURNS]
+    for m in msgs[:cutoff]:
+        if m.get('role') != 'tool':
+            continue
+        c = m.get('content')
+        if isinstance(c, str) and len(c) > _MAX_STALE_TOOL_OUTPUT_CHARS:
+            m['content'] = (
+                f"[stale tool output elided to save context — "
+                f"{len(c)} chars from an earlier turn]"
+            )
+    return msgs
 
 
 # ------------------------------------------------------------------
