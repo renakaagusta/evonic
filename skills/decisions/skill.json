@@ -1,0 +1,9 @@
+{
+  "id": "decisions",
+  "name": "Decision Ledger",
+  "version": "1.0.0",
+  "description": "Structured per-cycle, per-asset, per-agent decision log. Every agent records WHY each candidate was processed or skipped, with the underlying data snapshot. Aria queries this to answer 'what did we do in cycle X' / 'why didn't we deploy asset Y' / 'show me everything Helm decided about CUM'.",
+  "author": "internal",
+  "tools_file": "tools.json",
+  "variables": []
+}

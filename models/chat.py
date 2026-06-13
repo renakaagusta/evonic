@@ -710,7 +710,7 @@ class AgentChatDB:
                   AND external_user_id NOT LIKE '__agent__%'
                   AND external_user_id != '__scheduler__'
                   AND channel_id IS NOT NULL
-                ORDER BY updated_at DESC LIMIT 1
+                ORDER BY (external_user_id LIKE '-%') ASC, updated_at DESC LIMIT 1
             """, (agent_id,))
             row = cursor.fetchone()
             if row:

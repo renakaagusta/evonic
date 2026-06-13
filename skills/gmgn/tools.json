@@ -1,0 +1,118 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "gmgn_trending",
+      "description": "Get trending tokens ranked by volume/momentum on a chain. Use this in Hunter as the PRIMARY candidate source for fresh memecoin trades. Returns top N tokens with price/volume/liquidity/holders/smart-money/KOL counts + security flags. Granularity 1m to 24h.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "chain": {"type": "string", "enum": ["sol", "bsc", "base", "eth"], "description": "Chain. Default 'sol'."},
+          "interval": {"type": "string", "enum": ["1m", "5m", "1h", "6h", "24h"], "description": "Trending window. Default '1h'."},
+          "limit": {"type": "number", "description": "Max tokens to return (default 10, max 100)."}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmgn_token_info",
+      "description": "Real-time token fundamentals: price, volume, market cap, holders count, dev/KOL/smart-money counts, launchpad, social links, bonding-curve status.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["address"],
+        "properties": {
+          "address": {"type": "string", "description": "Token mint address"},
+          "chain": {"type": "string", "default": "sol"}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmgn_token_security",
+      "description": "Token security check — honeypot, blacklist, mint/freeze authority, renounced, wash trading, rug ratio. Call this BEFORE any swap_token or deploy decision. Returns boolean flags + a 0-1 rug_score.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["address"],
+        "properties": {
+          "address": {"type": "string", "description": "Token mint address"},
+          "chain": {"type": "string", "default": "sol"}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmgn_token_holders",
+      "description": "Top holders with categorization: smart-money / KOL / insider / bundler / sniper / fresh-wallet / whale. Used to assess concentration + bagholder risk.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["address"],
+        "properties": {
+          "address": {"type": "string"},
+          "chain": {"type": "string", "default": "sol"},
+          "limit": {"type": "number", "default": 20}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmgn_token_traders",
+      "description": "Top traders on this token in the current window — by P&L. Surfaces who's making money and how recently.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["address"],
+        "properties": {
+          "address": {"type": "string"},
+          "chain": {"type": "string", "default": "sol"},
+          "limit": {"type": "number", "default": 20}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmgn_smart_money_trades",
+      "description": "Recent smart-money (high P&L wallets) buys/sells on this token. If smart money is buying, that's a positive signal; if selling, treat as warning.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["address"],
+        "properties": {
+          "address": {"type": "string"},
+          "chain": {"type": "string", "default": "sol"},
+          "limit": {"type": "number", "default": 20}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmgn_kol_trades",
+      "description": "Recent KOL (key opinion leader / influencer) buys/sells on this token.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["address"],
+        "properties": {
+          "address": {"type": "string"},
+          "chain": {"type": "string", "default": "sol"},
+          "limit": {"type": "number", "default": 20}
+        }
+      }
+    }
+  }
+]

@@ -1,1002 +1,1123 @@
 [
- {
-  "type": "function",
-  "function": {
-   "name": "get_top_candidates",
-   "description": "Get the top pre-scored pool candidates for deployment review.\nAll filtering, scoring, and rule-checking is done in code \u2014 no analysis needed.\nReturns the top N eligible pools ranked by score (fee/TVL, organic, stability, volume).\nEach pool includes a score (0-100) and has already passed all hard disqualifiers.\nUse this instead of discover_pools for screening cycles.\nIf this returns one candidate, still judge whether it is actually worth deploying; one weak candidate should be skipped.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "limit": {
-      "type": "number",
-      "description": "Number of top candidates to return. Default 3."
-     }
+  {
+    "type": "function",
+    "function": {
+      "name": "get_top_candidates",
+      "description": "Get the top pre-scored pool candidates for deployment review.\nAll filtering, scoring, and rule-checking is done in code \u2014 no analysis needed.\nReturns the top N eligible pools ranked by score (fee/TVL, organic, stability, volume).\nEach pool includes a score (0-100) and has already passed all hard disqualifiers.\nUse this instead of discover_pools for screening cycles.\nIf this returns one candidate, still judge whether it is actually worth deploying; one weak candidate should be skipped.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "Number of top candidates to return. Default 3."
+          }
+        }
+      }
     }
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_momentum_candidates",
-   "description": "Spot-trade candidate source for Hunter (Trader-Screener).\nUnlike get_top_candidates (which is tuned for DLMM fee yield), this surfaces tokens with POSITIVE 5m price momentum but NOT in blow-off territory.\nFilters out: tokens with no 5m price change (no momentum), tokens with >50% 5m spike (likely peak/distribution), pools below TVL/volume floor, occupied tokens, cooldowns.\nSorts by momentumScore = min(priceChange, 25) \u00d7 log(1 + turnover).\nUse this as Hunter's primary candidate source instead of get_top_candidates.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "limit": {
-      "type": "number",
-      "description": "Max candidates to return. Default 5."
-     },
-     "min_price_change": {
-      "type": "number",
-      "description": "Minimum 5m price change %. Default 3. Raise for stronger momentum, lower for early entries."
-     },
-     "max_price_change": {
-      "type": "number",
-      "description": "Maximum 5m price change %. Default 50. Pools above this are likely blow-off / distribution."
-     },
-     "min_tvl": {
-      "type": "number",
-      "description": "Minimum pool TVL. Default 20000. Sets exit-liquidity floor."
-     },
-     "min_volume": {
-      "type": "number",
-      "description": "Minimum pool volume in the 5m window. Default 5000."
-     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_momentum_candidates",
+      "description": "Spot-trade candidate source for Hunter (Trader-Screener).\nUnlike get_top_candidates (which is tuned for DLMM fee yield), this surfaces tokens with POSITIVE 5m price momentum but NOT in blow-off territory.\nFilters out: tokens with no 5m price change (no momentum), tokens with >50% 5m spike (likely peak/distribution), pools below TVL/volume floor, occupied tokens, cooldowns.\nSorts by momentumScore = min(priceChange, 25) \u00d7 log(1 + turnover).\nUse this as Hunter's primary candidate source instead of get_top_candidates.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "Max candidates to return. Default 5."
+          },
+          "min_price_change": {
+            "type": "number",
+            "description": "Minimum 5m price change %. Default 3. Raise for stronger momentum, lower for early entries."
+          },
+          "max_price_change": {
+            "type": "number",
+            "description": "Maximum 5m price change %. Default 50. Pools above this are likely blow-off / distribution."
+          },
+          "min_tvl": {
+            "type": "number",
+            "description": "Minimum pool TVL. Default 20000. Sets exit-liquidity floor."
+          },
+          "min_volume": {
+            "type": "number",
+            "description": "Minimum pool volume in the 5m window. Default 5000."
+          }
+        }
+      }
     }
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_pool_detail",
-   "description": "Get detailed info for a specific DLMM pool by address.\nUse this during management to check current pool health (volume, fees, organic score, price trend).\nDefault timeframe is 5m for real-time accuracy during position management.\nUse a longer timeframe (1h, 4h) only when screening for new deployments.\n\nIMPORTANT: Only call this with a real pool address from get_my_positions or get_top_candidates. Never guess or construct a pool address.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "The on-chain pool address (base58 public key)"
-     },
-     "timeframe": {
-      "type": "string",
-      "enum": [
-       "5m",
-       "15m",
-       "30m",
-       "1h",
-       "2h",
-       "4h",
-       "12h",
-       "24h"
-      ],
-      "description": "Data timeframe. Default 5m for management (most accurate). Use 4h+ for screening."
-     }
-    },
-    "required": [
-     "pool_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_active_bin",
-   "description": "Get the current active bin and price for a DLMM pool.\nThis is an on-chain call via the SDK. Returns:\n- binId: the current active bin number\n- price: human-readable price (token X per token Y)\n- pricePerLamport: raw price in lamports\n\nOnly call this if you need the current price to calculate a specific bin range (e.g. user requested a % range). Do NOT call before every deploy \u2014 deploy_position fetches the active bin internally.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "The DLMM pool address"
-     }
-    },
-    "required": [
-     "pool_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "deploy_position",
-   "description": "Open a new DLMM liquidity position.\n\nPRIORITY ORDER for strategy and bins:\n1. User explicitly specifies \u2192 always follow exactly (user override is absolute)\n2. No user spec \u2192 use active strategy's lp_strategy and choose bins based on volatility\n\nHARD RULES:\n- Never use 'curve'.\n- Bin Step: Only deploy in pools with bin_step between 80 and 125.\n- Volatility must be positive. If volatility is 0, null, or missing, do not deploy.\n- Range must cover at least 35 total bins. Never deploy 1-bin/tiny ranges.\n- For single-side SOL deploys (amount_y only, amount_x=0), do not request upside exposure:\n  use bins_below only, keep bins_above=0, and the upper bin will be pinned to the current active bin.\n\nGuidelines (only when user hasn't specified):\n- Strategy: use the active strategy's lp_strategy field (bid_ask or spot)\n- Bins: choose from configured minBinsBelow/maxBinsBelow by positive volatility. The hard lower floor is 35 bins.\n- Deposit: single-sided SOL only: set amount_y/amount_sol, keep amount_x=0.\n\nWARNING: This executes a real on-chain transaction. Check DRY_RUN mode.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "The DLMM pool address to LP in"
-     },
-     "amount_y": {
-      "type": "number",
-      "description": "Amount of quote token (usually SOL) to deposit."
-     },
-     "amount_x": {
-      "type": "number",
-      "description": "Unsupported for this agent. Keep at 0; deploys are single-side SOL via amount_y."
-     },
-     "amount_sol": {
-      "type": "number",
-      "description": "Alias for amount_y. For backward compatibility."
-     },
-     "strategy": {
-      "type": "string",
-      "enum": [
-       "bid_ask",
-       "spot"
-      ],
-      "description": "DLMM strategy type. If user specifies, use exactly what they said. Otherwise use the active strategy's lp_strategy field."
-     },
-     "bins_below": {
-      "type": "number",
-      "description": "Number of bins below the current active bin. For single-side SOL deploys, this is the main range input: lower bin = active bin - bins_below, upper bin = active bin."
-     },
-     "bins_above": {
-      "type": "number",
-      "description": "Number of bins above the current active bin. Keep this at 0 for single-side SOL deploys. Only use this for dual-sided or explicit upside-exposure deploys."
-     },
-     "downside_pct": {
-      "type": "number",
-      "description": "Optional human-friendly downside range in percent below the current active price. Converted to bins internally via the Meteora SDK."
-     },
-     "upside_pct": {
-      "type": "number",
-      "description": "Optional human-friendly upside range in percent above the current active price. Do not use this for single-side SOL deploys."
-     },
-     "pool_name": {
-      "type": "string",
-      "description": "Human-readable pool name for record-keeping"
-     },
-     "base_mint": {
-      "type": "string",
-      "description": "Base token mint address \u2014 used to prevent duplicate token exposure across pools"
-     },
-     "bin_step": {
-      "type": "number",
-      "description": "Pool bin step (from discover_pools)"
-     },
-     "base_fee": {
-      "type": "number",
-      "description": "Pool base fee percentage (from discover_pools)"
-     },
-     "volatility": {
-      "type": "number",
-      "description": "Pool volatility at deploy time, sourced from max(screening timeframe, 30m)"
-     },
-     "fee_tvl_ratio": {
-      "type": "number",
-      "description": "fee/TVL ratio at deploy time"
-     },
-     "organic_score": {
-      "type": "number",
-      "description": "Base token organic score at deploy time"
-     },
-     "initial_value_usd": {
-      "type": "number",
-      "description": "Estimated USD value being deployed"
-     },
-     "confidence": {
-      "type": "number",
-      "description": "Argus PROCEED confidence (0..1). Executor scales position: 0.85=50%, 0.95+=100% of computeDeployAmount. Always pass the confidence from the verdict you received."
-     }
-    },
-    "required": [
-     "pool_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_position_pnl",
-   "description": "Get detailed PnL and real-time Fee/TVL metrics for an open position.\nUse this during management to check if yield has dropped significantly.\nReturns current feePerTvl24h which indicates the current APY of the pool.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "The pool address"
-     },
-     "position_address": {
-      "type": "string",
-      "description": "The position public key"
-     }
-    },
-    "required": [
-     "pool_address",
-     "position_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_my_positions",
-   "description": "List all open DLMM positions for the agent wallet.\nReturns positions grouped by pool, each with:\n- position address\n- pool address and token pair\n- bin range (min/max bin IDs)\n- whether currently in range\n- unclaimed fees (in USD)\n- total deposited value vs current value\n- time since last rebalance\n\nUse this at the start of every management cycle.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {}
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "claim_fees",
-   "description": "Claim accumulated swap fees from a specific position.\nOnly call when unclaimed fees > $5 to justify transaction costs.\nReturns the transaction hash and amounts claimed.\n\nWARNING: This executes a real on-chain transaction.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "position_address": {
-      "type": "string",
-      "description": "The position public key to claim fees from"
-     }
-    },
-    "required": [
-     "position_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "close_position",
-   "description": "Remove all liquidity and close a position.\nThis withdraws all tokens back to the wallet and closes the position account.\nUse when:\n- Position has been out of range for > 30 minutes\n- IL exceeds accumulated fees\n- Token shows danger signals (organic score drop, volume crash)\n- Rebalancing (close old + open new)\n\nWARNING: This executes a real on-chain transaction. Cannot be undone.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "position_address": {
-      "type": "string",
-      "description": "The position public key to close"
-     },
-     "skip_swap": {
-      "type": "boolean",
-      "description": "Set to true if user explicitly wants to hold/keep the base token after closing. Default: false (auto-swaps base token back to SOL)."
-     },
-     "reason": {
-      "type": "string",
-      "description": "Why this position is being closed. Include the rule that triggered it, e.g. 'low yield', 'stop loss', 'trailing TP', 'OOR'. Used for pool memory."
-     }
-    },
-    "required": [
-     "position_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_wallet_balance",
-   "description": "Get current wallet balances for SOL, USDC, and all other token holdings.\nReturns:\n- SOL balance (native)\n- USDC balance\n- Other SPL token balances with USD values\n- Total portfolio value in USD\n\nUse to check available capital before deploying positions.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {}
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "swap_token",
-   "description": "Swap tokens via Jupiter aggregator.\nUse when you need to rebalance wallet holdings, e.g.:\n- Convert claimed fee tokens back to SOL/USDC\n- Prepare token pair before deploying a position\n\nWARNING: This executes a real on-chain transaction.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "input_mint": {
-      "type": "string",
-      "description": "Mint address of the token to sell"
-     },
-     "output_mint": {
-      "type": "string",
-      "description": "Mint address of the token to buy"
-     },
-     "amount": {
-      "type": "number",
-      "description": "Amount of input token to swap (in human-readable units, not lamports)"
-     }
-    },
-    "required": [
-     "input_mint",
-     "output_mint",
-     "amount"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "update_config",
-   "description": "Update any of your operating parameters at runtime.\nChanges persist to user-config.json and take effect immediately \u2014 no restart needed.\n\nVALID KEYS (use EXACTLY these key names, nothing else):\nScreening: minFeeActiveTvlRatio, minTvl, maxTvl, minVolume, minOrganic, minQuoteOrganic, minHolders, minMcap, maxMcap, minBinStep, maxBinStep, timeframe, category, minTokenFeesSol, excludeHighSupplyConcentration, allowedLaunchpads, blockedLaunchpads\nManagement: minClaimAmount, outOfRangeBinsToClose, outOfRangeWaitMinutes, oorCooldownTriggerCount, oorCooldownHours, repeatDeployCooldownEnabled, repeatDeployCooldownTriggerCount, repeatDeployCooldownHours, repeatDeployCooldownScope, repeatDeployCooldownMinFeeEarnedPct, minVolumeToRebalance, stopLossPct, takeProfitPct, minSolToOpen, deployAmountSol, gasReserve, positionSizePct\nRisk: maxPositions, maxDeployAmount\nSchedule: managementIntervalMin, screeningIntervalMin\nModels: managementModel, screeningModel, generalModel\nStrategy: minBinsBelow, maxBinsBelow, defaultBinsBelow (legacy binsBelow maps to maxBinsBelow)\n\nReason is optional but helpful \u2014 logged as a lesson when provided.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "changes": {
-      "type": "object",
-      "description": "Key-value pairs of settings to update. e.g. { \"takeProfitPct\": 8 }"
-     },
-     "reason": {
-      "type": "string",
-      "description": "Why you are making this change \u2014 what you observed that justified it"
-     }
-    },
-    "required": [
-     "changes"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "check_smart_wallets_on_pool",
-   "description": "Check if any tracked smart wallets have an active position in a given pool.\nUse this before deploying to gauge confidence \u2014 if smart wallets are in the pool it's a strong signal.\nIf no smart wallets are present, rely on fundamentals (fees, volume, organic score) as usual.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "Pool address to check"
-     }
-    },
-    "required": [
-     "pool_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_token_info",
-   "description": "Get token data from Jupiter (organic score, holders, audit, price stats, mcap).\nUse this to research a token before deploying or when the user asks about a token.\nAccepts token name, symbol, or mint address as query.\n\nReturns: organic score, holder count, mcap, liquidity, audit flags (mint/freeze disabled, bot holders %), 1h and 24h stats.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "query": {
-      "type": "string",
-      "description": "Token name, symbol, or mint address"
-     }
-    },
-    "required": [
-     "query"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_token_holders",
-   "description": "Get holder distribution for a token by mint address.\nFetches top 100 holders \u2014 use limit to control how many to display (default 20).\nEach holder includes: address, amount, % of supply, SOL balance, tags (Pool/AMM/etc), and funding info (who funded this wallet, amount, slot).\nis_pool=true means it's a liquidity pool address, not a real holder \u2014 filter these out when analyzing concentration.\n\nAlso returns global_fees_sol \u2014 total priority/jito tips paid by ALL traders on this token (NOT Meteora LP fees).\nThis is a key signal: low global_fees_sol means transactions are bundled or the token is a scam.\nHARD GATE: if global_fees_sol < config.screening.minTokenFeesSol (default 30), do NOT deploy.\n\nNOTE: Requires mint address. If you only have a symbol/name, call get_token_info first to resolve the mint.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "mint": {
-      "type": "string",
-      "description": "Token mint address (base58). Use get_token_info first if you only have a symbol."
-     },
-     "limit": {
-      "type": "number",
-      "description": "How many holders to return (default 20, max 100)"
-     }
-    },
-    "required": [
-     "mint"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "study_top_lpers",
-   "description": "Fetch and analyze top open LPers for a pool to learn from their behaviour.\nReturns LPAgent-backed owner aggregates and historical style/range samples from\nthe Agent Meridian `/study-top-lp/:pool` endpoint.\n\nUse this before deploying into a new pool to:\n- See if top performers are scalpers (< 1h holds) or long-term holders.\n- Match your strategy and range to what is actually working for others right now.\n- Avoid pools where even the best open LPs are poorly placed or losing.\n\nServer note: study data is cached and refreshed every 30 minutes.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "Pool address to study top LPers for"
-     },
-     "limit": {
-      "type": "number",
-      "description": "Number of top LPers to study. Default 4."
-     }
-    },
-    "required": [
-     "pool_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "set_position_note",
-   "description": "Save a persistent instruction for a position that ALL future management cycles will respect.\nUse this immediately whenever the user gives a specific instruction about a position:\n- \"hold until 5% profit\"\n- \"don't close before fees hit $10\"\n- \"close if it goes out of range\"\n- \"hold for at least 2 hours\"\n\nThe instruction is stored in state.json and injected into every management cycle prompt.\nPass null or empty string to clear an existing instruction.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "position_address": {
-      "type": "string",
-      "description": "The position address to attach the instruction to"
-     },
-     "instruction": {
-      "type": "string",
-      "description": "The instruction to persist (e.g. 'hold until PnL >= 5%'). Pass empty string to clear."
-     }
-    },
-    "required": [
-     "position_address",
-     "instruction"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "recenter_position",
-   "description": "Re-center a position around the CURRENT active bin to keep liquidity earning fees.\nIt closes the position, swaps any base token back to SOL, and redeploys single-sided SOL around the new active bin (same pool).\nUse when a position has drifted off the active bin (price moved) but the pool is still healthy \u2014 instead of closing dead.\nThis is how top LP performers keep fees flowing. Executes real on-chain transactions.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "position_address": {
-      "type": "string",
-      "description": "The position public key to re-center"
-     },
-     "bins_below": {
-      "type": "number",
-      "description": "Optional bins below active bin for the new range; defaults to the configured strategy default."
-     }
-    },
-    "required": [
-     "position_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_token_narrative",
-   "description": "Get the narrative or story behind a token from Jupiter ChainInsight.\nReturns a plain-text description of what the token is about \u2014 its origin, theme, community, and activity.\nUse during token evaluation to understand if there is a real catalyst driving attention and volume.\n\nGOOD narrative signals (proceed with more confidence):\n- Specific origin story: tied to a real-world event, viral moment, person, animal, place, or cultural reference\n- Active community: mentions contests, donations, real-world actions, organized activities\n- Trending catalyst: references something currently viral on X/CT (KOL call, news event, meme wave)\n- Named entities: real identifiable subjects (a specific animal, person, project, game, etc.)\n\nBAD narrative signals (caution or skip):\n- Empty or null \u2014 no story at all\n- Pure hype/financial language only: \"next 100x\", \"to the moon\", \"fair launch gem\" with no substance\n- Completely generic: \"community-driven token\", \"meme coin\" with zero specific context\n- Copy-paste of another token's narrative",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "mint": {
-      "type": "string",
-      "description": "Token mint address (base58)"
-     }
-    },
-    "required": [
-     "mint"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "search_pools",
-   "description": "Search for DLMM pools by token symbol, ticker, or contract address (CA).\nUse this when the user asks to deploy into a specific token or pool by name/CA,\nor when you want to find pools for a specific token outside of the normal screening flow.\n\nExamples: \"find pools for ROSIE\", \"search BONK pools\", \"look up pool for CA abc123...\"\n\nReturns pool address, name, bin_step, fee %, TVL, volume, and token mints.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "query": {
-      "type": "string",
-      "description": "Token symbol, ticker name, or contract address to search for"
-     },
-     "limit": {
-      "type": "number",
-      "description": "Max results to return (default 10)"
-     }
-    },
-    "required": [
-     "query"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_pool_memory",
-   "description": "Check your deploy history for a pool BEFORE deploying.\nReturns all past deploys, PnL, win rate, and any notes you've added.\n\nCall this tool before deploying to any pool \u2014 you may have been here before and it didn't work.\nAlso useful during screening to skip pools with a bad track record.",
-   "parameters": {
-    "additionalProperties": false,
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "The pool address to look up"
-     }
-    },
-    "required": [
-     "pool_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "evaluator",
-   "description": "Run a propose-only meta-agent that reviews recent decisions, lessons, and performance metrics, then writes parameter-tuning proposals to evaluator-proposals.jsonl. Never auto-applies \u2014 humans approve via evaluator_apply. Use for strategic review (typically every 24h, or on-demand after a series of trades).",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "trigger": {
-      "type": "string",
-      "description": "Optional label for what triggered this review (e.g. 'on_demand', 'scheduled', 'cli'). Default 'cli'."
-     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_pool_detail",
+      "description": "Get detailed info for a specific DLMM pool by address.\nUse this during management to check current pool health (volume, fees, organic score, price trend).\nDefault timeframe is 5m for real-time accuracy during position management.\nUse a longer timeframe (1h, 4h) only when screening for new deployments.\n\nIMPORTANT: Only call this with a real pool address from get_my_positions or get_top_candidates. Never guess or construct a pool address.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "The on-chain pool address (base58 public key)"
+          },
+          "timeframe": {
+            "type": "string",
+            "enum": [
+              "5m",
+              "15m",
+              "30m",
+              "1h",
+              "2h",
+              "4h",
+              "12h",
+              "24h"
+            ],
+            "description": "Data timeframe. Default 5m for management (most accurate). Use 4h+ for screening."
+          }
+        },
+        "required": [
+          "pool_address"
+        ]
+      }
     }
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "evaluator_apply",
-   "description": "Apply a previously-written evaluator proposal (config diffs). Validates against the TUNABLE_KEYS whitelist before mutating user-config.json. Defaults to the latest proposal if no id is provided.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "id": {
-      "type": "string",
-      "description": "Specific proposal id to apply. Omit to apply the latest."
-     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_active_bin",
+      "description": "Get the current active bin and price for a DLMM pool.\nThis is an on-chain call via the SDK. Returns:\n- binId: the current active bin number\n- price: human-readable price (token X per token Y)\n- pricePerLamport: raw price in lamports\n\nOnly call this if you need the current price to calculate a specific bin range (e.g. user requested a % range). Do NOT call before every deploy \u2014 deploy_position fetches the active bin internally.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "The DLMM pool address"
+          }
+        },
+        "required": [
+          "pool_address"
+        ]
+      }
     }
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "compressor",
-   "description": "Semantically merge a role's accumulated lessons to reduce noise. By default compresses every role whose lesson count exceeds threshold. Safe \u2014 never touches pinned or auto-evolution lessons. Backs up pre-compression state.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "role": {
-      "type": "string",
-      "enum": [
-       "SCREENER",
-       "MANAGER",
-       "CHALLENGER"
-      ],
-      "description": "Optional. Compress one specific role. Omit to compress all over-threshold roles."
-     },
-     "force": {
-      "type": "boolean",
-      "description": "Bypass the threshold check. Default false."
-     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "deploy_position",
+      "description": "Open a new DLMM liquidity position.\n\nPRIORITY ORDER for strategy and bins:\n1. User explicitly specifies \u2192 always follow exactly (user override is absolute)\n2. No user spec \u2192 use active strategy's lp_strategy and choose bins based on volatility\n\nHARD RULES:\n- Never use 'curve'.\n- Bin Step: Only deploy in pools with bin_step between 80 and 125.\n- Volatility must be positive. If volatility is 0, null, or missing, do not deploy.\n- Range must cover at least 35 total bins. Never deploy 1-bin/tiny ranges.\n- For single-side SOL deploys (amount_y only, amount_x=0), do not request upside exposure:\n  use bins_below only, keep bins_above=0, and the upper bin will be pinned to the current active bin.\n\nGuidelines (only when user hasn't specified):\n- Strategy: use the active strategy's lp_strategy field (bid_ask or spot)\n- Bins: choose from configured minBinsBelow/maxBinsBelow by positive volatility. The hard lower floor is 35 bins.\n- Deposit: single-sided SOL only: set amount_y/amount_sol, keep amount_x=0.\n\nWARNING: This executes a real on-chain transaction. Check DRY_RUN mode.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "The DLMM pool address to LP in"
+          },
+          "amount_y": {
+            "type": "number",
+            "description": "Amount of quote token (usually SOL) to deposit."
+          },
+          "amount_x": {
+            "type": "number",
+            "description": "Unsupported for this agent. Keep at 0; deploys are single-side SOL via amount_y."
+          },
+          "amount_sol": {
+            "type": "number",
+            "description": "Alias for amount_y. For backward compatibility."
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "bid_ask",
+              "spot"
+            ],
+            "description": "DLMM strategy type. If user specifies, use exactly what they said. Otherwise use the active strategy's lp_strategy field."
+          },
+          "bins_below": {
+            "type": "number",
+            "description": "Number of bins below the current active bin. For single-side SOL deploys, this is the main range input: lower bin = active bin - bins_below, upper bin = active bin."
+          },
+          "bins_above": {
+            "type": "number",
+            "description": "Number of bins above the current active bin. Keep this at 0 for single-side SOL deploys. Only use this for dual-sided or explicit upside-exposure deploys."
+          },
+          "downside_pct": {
+            "type": "number",
+            "description": "Optional human-friendly downside range in percent below the current active price. Converted to bins internally via the Meteora SDK."
+          },
+          "upside_pct": {
+            "type": "number",
+            "description": "Optional human-friendly upside range in percent above the current active price. Do not use this for single-side SOL deploys."
+          },
+          "pool_name": {
+            "type": "string",
+            "description": "Human-readable pool name for record-keeping"
+          },
+          "base_mint": {
+            "type": "string",
+            "description": "Base token mint address \u2014 used to prevent duplicate token exposure across pools"
+          },
+          "bin_step": {
+            "type": "number",
+            "description": "Pool bin step (from discover_pools)"
+          },
+          "base_fee": {
+            "type": "number",
+            "description": "Pool base fee percentage (from discover_pools)"
+          },
+          "volatility": {
+            "type": "number",
+            "description": "Pool volatility at deploy time, sourced from max(screening timeframe, 30m)"
+          },
+          "fee_tvl_ratio": {
+            "type": "number",
+            "description": "fee/TVL ratio at deploy time"
+          },
+          "organic_score": {
+            "type": "number",
+            "description": "Base token organic score at deploy time"
+          },
+          "initial_value_usd": {
+            "type": "number",
+            "description": "Estimated USD value being deployed"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Argus PROCEED confidence (0..1). Executor scales position: 0.85=50%, 0.95+=100% of computeDeployAmount. Always pass the confidence from the verdict you received."
+          }
+        },
+        "required": [
+          "pool_address"
+        ]
+      }
     }
-   }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_position_pnl",
+      "description": "Get detailed PnL and real-time Fee/TVL metrics for an open position.\nUse this during management to check if yield has dropped significantly.\nReturns current feePerTvl24h which indicates the current APY of the pool.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "The pool address"
+          },
+          "position_address": {
+            "type": "string",
+            "description": "The position public key"
+          }
+        },
+        "required": [
+          "pool_address",
+          "position_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_my_positions",
+      "description": "List all open DLMM positions for the agent wallet.\nReturns positions grouped by pool, each with:\n- position address\n- pool address and token pair\n- bin range (min/max bin IDs)\n- whether currently in range\n- unclaimed fees (in USD)\n- total deposited value vs current value\n- time since last rebalance\n\nUse this at the start of every management cycle.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {}
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "claim_fees",
+      "description": "Claim accumulated swap fees from a specific position.\nOnly call when unclaimed fees > $5 to justify transaction costs.\nReturns the transaction hash and amounts claimed.\n\nWARNING: This executes a real on-chain transaction.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "position_address": {
+            "type": "string",
+            "description": "The position public key to claim fees from"
+          }
+        },
+        "required": [
+          "position_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "close_position",
+      "description": "Remove all liquidity and close a position.\nThis withdraws all tokens back to the wallet and closes the position account.\nUse when:\n- Position has been out of range for > 30 minutes\n- IL exceeds accumulated fees\n- Token shows danger signals (organic score drop, volume crash)\n- Rebalancing (close old + open new)\n\nWARNING: This executes a real on-chain transaction. Cannot be undone.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "position_address": {
+            "type": "string",
+            "description": "The position public key to close"
+          },
+          "skip_swap": {
+            "type": "boolean",
+            "description": "Set to true if user explicitly wants to hold/keep the base token after closing. Default: false (auto-swaps base token back to SOL)."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why this position is being closed. Include the rule that triggered it, e.g. 'low yield', 'stop loss', 'trailing TP', 'OOR'. Used for pool memory."
+          }
+        },
+        "required": [
+          "position_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_wallet_balance",
+      "description": "Get current wallet balances for SOL, USDC, and all other token holdings.\nReturns:\n- SOL balance (native)\n- USDC balance\n- Other SPL token balances with USD values\n- Total portfolio value in USD\n\nUse to check available capital before deploying positions.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {}
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_gmgn_token_balance",
+      "description": "Get wallet token balance for a single token via gmgn-cli (keyless, no Helius). Use as fallback when get_wallet_balance fails (Helius 429 / outage). Returns balance in UI units (decimals already applied). Required: wallet_address, mint. Optional: chain (default sol).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "wallet_address": {
+            "type": "string",
+            "description": "Solana wallet address"
+          },
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          },
+          "chain": {
+            "type": "string",
+            "description": "Chain (default: sol)"
+          }
+        },
+        "required": [
+          "wallet_address",
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "swap_token",
+      "description": "Swap tokens via Jupiter aggregator.\nUse when you need to rebalance wallet holdings, e.g.:\n- Convert claimed fee tokens back to SOL/USDC\n- Prepare token pair before deploying a position\n\nWARNING: This executes a real on-chain transaction.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "input_mint": {
+            "type": "string",
+            "description": "Mint address of the token to sell"
+          },
+          "output_mint": {
+            "type": "string",
+            "description": "Mint address of the token to buy"
+          },
+          "amount": {
+            "type": "number",
+            "description": "Amount of input token to swap (in human-readable units, not lamports)"
+          }
+        },
+        "required": [
+          "input_mint",
+          "output_mint",
+          "amount"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "update_config",
+      "description": "Update any of your operating parameters at runtime.\nChanges persist to user-config.json and take effect immediately \u2014 no restart needed.\n\nVALID KEYS (use EXACTLY these key names, nothing else):\nScreening: minFeeActiveTvlRatio, minTvl, maxTvl, minVolume, minOrganic, minQuoteOrganic, minHolders, minMcap, maxMcap, minBinStep, maxBinStep, timeframe, category, minTokenFeesSol, excludeHighSupplyConcentration, allowedLaunchpads, blockedLaunchpads\nManagement: minClaimAmount, outOfRangeBinsToClose, outOfRangeWaitMinutes, oorCooldownTriggerCount, oorCooldownHours, repeatDeployCooldownEnabled, repeatDeployCooldownTriggerCount, repeatDeployCooldownHours, repeatDeployCooldownScope, repeatDeployCooldownMinFeeEarnedPct, minVolumeToRebalance, stopLossPct, takeProfitPct, minSolToOpen, deployAmountSol, gasReserve, positionSizePct\nRisk: maxPositions, maxDeployAmount\nSchedule: managementIntervalMin, screeningIntervalMin\nModels: managementModel, screeningModel, generalModel\nStrategy: minBinsBelow, maxBinsBelow, defaultBinsBelow (legacy binsBelow maps to maxBinsBelow)\n\nReason is optional but helpful \u2014 logged as a lesson when provided.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "object",
+            "description": "Key-value pairs of settings to update. e.g. { \"takeProfitPct\": 8 }"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why you are making this change \u2014 what you observed that justified it"
+          }
+        },
+        "required": [
+          "changes"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "check_smart_wallets_on_pool",
+      "description": "Check if any tracked smart wallets have an active position in a given pool.\nUse this before deploying to gauge confidence \u2014 if smart wallets are in the pool it's a strong signal.\nIf no smart wallets are present, rely on fundamentals (fees, volume, organic score) as usual.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "Pool address to check"
+          }
+        },
+        "required": [
+          "pool_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_token_info",
+      "description": "Get token data from Jupiter (organic score, holders, audit, price stats, mcap).\nUse this to research a token before deploying or when the user asks about a token.\nAccepts token name, symbol, or mint address as query.\n\nReturns: organic score, holder count, mcap, liquidity, audit flags (mint/freeze disabled, bot holders %), 1h and 24h stats.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Token name, symbol, or mint address"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_token_holders",
+      "description": "Get holder distribution for a token by mint address.\nFetches top 100 holders \u2014 use limit to control how many to display (default 20).\nEach holder includes: address, amount, % of supply, SOL balance, tags (Pool/AMM/etc), and funding info (who funded this wallet, amount, slot).\nis_pool=true means it's a liquidity pool address, not a real holder \u2014 filter these out when analyzing concentration.\n\nAlso returns global_fees_sol \u2014 total priority/jito tips paid by ALL traders on this token (NOT Meteora LP fees).\nThis is a key signal: low global_fees_sol means transactions are bundled or the token is a scam.\nHARD GATE: if global_fees_sol < config.screening.minTokenFeesSol (default 30), do NOT deploy.\n\nNOTE: Requires mint address. If you only have a symbol/name, call get_token_info first to resolve the mint.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address (base58). Use get_token_info first if you only have a symbol."
+          },
+          "limit": {
+            "type": "number",
+            "description": "How many holders to return (default 20, max 100)"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "study_top_lpers",
+      "description": "Fetch and analyze top open LPers for a pool to learn from their behaviour.\nReturns LPAgent-backed owner aggregates and historical style/range samples from\nthe Agent Meridian `/study-top-lp/:pool` endpoint.\n\nUse this before deploying into a new pool to:\n- See if top performers are scalpers (< 1h holds) or long-term holders.\n- Match your strategy and range to what is actually working for others right now.\n- Avoid pools where even the best open LPs are poorly placed or losing.\n\nServer note: study data is cached and refreshed every 30 minutes.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "Pool address to study top LPers for"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Number of top LPers to study. Default 4."
+          }
+        },
+        "required": [
+          "pool_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "set_position_note",
+      "description": "Save a persistent instruction for a position that ALL future management cycles will respect.\nUse this immediately whenever the user gives a specific instruction about a position:\n- \"hold until 5% profit\"\n- \"don't close before fees hit $10\"\n- \"close if it goes out of range\"\n- \"hold for at least 2 hours\"\n\nThe instruction is stored in state.json and injected into every management cycle prompt.\nPass null or empty string to clear an existing instruction.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "position_address": {
+            "type": "string",
+            "description": "The position address to attach the instruction to"
+          },
+          "instruction": {
+            "type": "string",
+            "description": "The instruction to persist (e.g. 'hold until PnL >= 5%'). Pass empty string to clear."
+          }
+        },
+        "required": [
+          "position_address",
+          "instruction"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "recenter_position",
+      "description": "Re-center a position around the CURRENT active bin to keep liquidity earning fees.\nIt closes the position, swaps any base token back to SOL, and redeploys single-sided SOL around the new active bin (same pool).\nUse when a position has drifted off the active bin (price moved) but the pool is still healthy \u2014 instead of closing dead.\nThis is how top LP performers keep fees flowing. Executes real on-chain transactions.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "position_address": {
+            "type": "string",
+            "description": "The position public key to re-center"
+          },
+          "bins_below": {
+            "type": "number",
+            "description": "Optional bins below active bin for the new range; defaults to the configured strategy default."
+          }
+        },
+        "required": [
+          "position_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_token_narrative",
+      "description": "Get the narrative or story behind a token from Jupiter ChainInsight.\nReturns a plain-text description of what the token is about \u2014 its origin, theme, community, and activity.\nUse during token evaluation to understand if there is a real catalyst driving attention and volume.\n\nGOOD narrative signals (proceed with more confidence):\n- Specific origin story: tied to a real-world event, viral moment, person, animal, place, or cultural reference\n- Active community: mentions contests, donations, real-world actions, organized activities\n- Trending catalyst: references something currently viral on X/CT (KOL call, news event, meme wave)\n- Named entities: real identifiable subjects (a specific animal, person, project, game, etc.)\n\nBAD narrative signals (caution or skip):\n- Empty or null \u2014 no story at all\n- Pure hype/financial language only: \"next 100x\", \"to the moon\", \"fair launch gem\" with no substance\n- Completely generic: \"community-driven token\", \"meme coin\" with zero specific context\n- Copy-paste of another token's narrative",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address (base58)"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "search_pools",
+      "description": "Search for DLMM pools by token symbol, ticker, or contract address (CA).\nUse this when the user asks to deploy into a specific token or pool by name/CA,\nor when you want to find pools for a specific token outside of the normal screening flow.\n\nExamples: \"find pools for ROSIE\", \"search BONK pools\", \"look up pool for CA abc123...\"\n\nReturns pool address, name, bin_step, fee %, TVL, volume, and token mints.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Token symbol, ticker name, or contract address to search for"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Max results to return (default 10)"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_pool_memory",
+      "description": "Check your deploy history for a pool BEFORE deploying.\nReturns all past deploys, PnL, win rate, and any notes you've added.\n\nCall this tool before deploying to any pool \u2014 you may have been here before and it didn't work.\nAlso useful during screening to skip pools with a bad track record.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "The pool address to look up"
+          }
+        },
+        "required": [
+          "pool_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "evaluator",
+      "description": "Run a propose-only meta-agent that reviews recent decisions, lessons, and performance metrics, then writes parameter-tuning proposals to evaluator-proposals.jsonl. Never auto-applies \u2014 humans approve via evaluator_apply. Use for strategic review (typically every 24h, or on-demand after a series of trades).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "trigger": {
+            "type": "string",
+            "description": "Optional label for what triggered this review (e.g. 'on_demand', 'scheduled', 'cli'). Default 'cli'."
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "evaluator_apply",
+      "description": "Apply a previously-written evaluator proposal (config diffs). Validates against the TUNABLE_KEYS whitelist before mutating user-config.json. Defaults to the latest proposal if no id is provided.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Specific proposal id to apply. Omit to apply the latest."
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "compressor",
+      "description": "Semantically merge a role's accumulated lessons to reduce noise. By default compresses every role whose lesson count exceeds threshold. Safe \u2014 never touches pinned or auto-evolution lessons. Backs up pre-compression state.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "SCREENER",
+              "MANAGER",
+              "CHALLENGER"
+            ],
+            "description": "Optional. Compress one specific role. Omit to compress all over-threshold roles."
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Bypass the threshold check. Default false."
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_dex_velocity",
+      "description": "Real-time price + volume velocity for a Meteora pool. Returns DexScreener 5m/1h/6h/24h price/volume/txns AND (when available) an accurate keyless Birdeye overlay in `birdeye_velocity` (30m/1h/2h/4h/24h with buy/sell split + unique wallets + holders). When `velocity_source` is \"birdeye\", PREFER `birdeye_velocity` \u2014 the DexScreener short-windows (esp. 5m) are unreliable for thin pools. Use when verifying a pool just before deploy.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "DLMM pool address"
+          }
+        },
+        "required": [
+          "pool_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_rugcheck_report",
+      "description": "RugCheck.xyz risk report for a token mint. Returns rug score (0-100, lower=better), rugged flag, risk summary (danger/warn counts + names), top holder concentration, and a verdict_hint. Use to verify a token isn't a known scam before deploying. Does not catch every bad token \u2014 combine with on-chain signals.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_pumpfun_status",
+      "description": "Pump.fun token status: graduated (migrated to AMM) vs pre-graduation (still on bonding curve), creator wallet, age in hours, market cap, socials, and a verdict_hint. Pre-graduation tokens are statistically much higher rug risk \u2014 VETO unless smart wallets present.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_lp_cohort",
+      "description": "FULL LP cohort PnL distribution for a DLMM pool. Decodes every open position in the pool, groups by owner, fetches PnL via Meteora's API for each unique LP, and aggregates: total_positions, total_lps, profitable_pct, median_pnl_pct, p25/p75, top10_by_size_avg_pnl_pct, and a verdict_hint (STRONG_GREEN / STRONG_RED). Highest-signal pool-quality check \u2014 answers 'are most LPs actually making money?' Use during pool review. Slower than other checks (~1-2s), worth the time.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "DLMM pool address"
+          },
+          "max_owners_sampled": {
+            "type": "number",
+            "description": "Cap on unique LPs to sample (default 60). Lower for faster cycles, higher for more accurate stats on large pools."
+          }
+        },
+        "required": [
+          "pool_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "add_pool_note",
+      "description": "Append a freeform note to a poolapos;s memory file. Use this after a position closes or recenters to record observed behavior (e.g. OOR pattern, dump timing, fee/TVL trajectory, final PnL). Future Scout/Argus will read these via get_pool_memory.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pool_address": {
+            "type": "string",
+            "description": "The DLMM pool address."
+          },
+          "note": {
+            "type": "string",
+            "description": "Concise observation (1-2 sentences). Lead with the signal (\"went OOR 14 min after deploy\"), then a brief WHY if known."
+          }
+        },
+        "required": [
+          "pool_address",
+          "note"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_smart_wallets",
+      "description": "Return the current list of tracked smart wallets (alpha KOLs, top LPers) \u2014 addresses, names, categories, types.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "add_smart_wallet",
+      "description": "Add a wallet to the tracked smart-wallet list. Use after observing strong realized PnL from this wallet on recent pools we deployed into.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Solana wallet address (base58)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Short label for the wallet, e.g. 'kol_pmoney', 'alpha_lp_5'."
+          },
+          "category": {
+            "type": "string",
+            "description": "Optional tag, e.g. 'alpha', 'kol', 'lp_pro'. Defaults to 'alpha'."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "lp",
+              "holder"
+            ],
+            "description": "'lp' = LP-side wallet (use for LP cohort checks); 'holder' = token-holding wallet."
+          }
+        },
+        "required": [
+          "address",
+          "name"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "remove_smart_wallet",
+      "description": "Remove a wallet from the tracked list. Use when a previously-smart wallet has been underperforming (e.g. multiple negative-PnL exits over the review window).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Solana wallet address to remove."
+          }
+        },
+        "required": [
+          "address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "estimate_close_slippage",
+      "description": "Estimate the slippage cost (USD + %) of closing a specific position right now. Internally calls Jupiter quote API to price the base->SOL swap that would execute on close, and compares against position spot value. Returns 'estimated_slippage_pct' (the headline number) and 'interpretation' (HIGH / MODERATE / LOW). Use BEFORE every close: if slippage > 5%, hold or recenter unless pool is dying.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position_address": {
+            "type": "string",
+            "description": "The position address."
+          }
+        },
+        "required": [
+          "position_address"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_birdeye_velocity",
+      "description": "Accurate keyless Birdeye per-token velocity at 30m/1h/2h/4h/24h: price change %, volume USD (total + buy/sell split), buy/sell counts, trade count, unique wallets (+change%), plus holder count, liquidity, mcap. Works for ANY token mint (not just trending). Higher fidelity than DexScreener short-windows for momentum/trajectory checks. No 5m window exists \u2014 30m is the shortest.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_birdeye_security",
+      "description": "Keyless Birdeye token security/risk report: mintable (mint authority), freeze authority, mint renounced, mutable metadata, creator address + %, owner %, top-10 holder %, token-2022 / transfer-fee flags. Use alongside get_rugcheck_report to verify a token isn't a rug before deploying/buying.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_birdeye_gems",
+      "description": "Keyless Birdeye 'find-gems' trending token list with per-window (1h/4h/24h) velocity, unique wallets, holder count and top-10 concentration. An ADDITIONAL momentum/trending candidate source beyond Meteora discovery \u2014 useful when the primary candidate feed is dry. Returns tokens with mint, symbol, price, mcap, liquidity.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "trending|topGainers|topLosers|highestVolume|mostVisited (default trending)"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "max tokens (default 50)"
+          },
+          "sort_by": {
+            "type": "string",
+            "description": "e.g. tf24h.volumeChangePercent, tf1h.priceChangePercent, holderCount"
+          },
+          "shown_time_frame": {
+            "type": "string",
+            "description": "1h|4h|24h (default 24h)"
+          }
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_birdeye_ohlcv",
+      "description": "Keyless Birdeye OHLCV candles for a token at ANY resolution (1s/5s/1m/5m/15m/1h/...). Returns {res, candles:[{t,o,h,l,c,v}]} newest last (v = base-token volume; xclose ~= USD). Use to compute precise short-window momentum/volume (e.g. true 5m) or inspect the recent price path. Params: mint (required), res (default 5m), count (default 60).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          },
+          "res": {
+            "type": "string",
+            "description": "candle resolution: 1s,5s,1m,5m,15m,1h,... (default 5m)"
+          },
+          "count": {
+            "type": "integer",
+            "description": "number of candles back (default 60)"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_birdeye_token_stats",
+      "description": "Keyless Birdeye multi-timeframe token stats in ONE call \u2014 NATIVE price change at 5m/30m/1h/2h/4h/8h/24h (no OHLCV computation needed), buy/sell counts + dollar-volume split, uniqueTraders, market count, liquidity, mcap, launchpad + pump.fun bonding-curve status. THE multi-timeframe liveness read for spot screening: a quiet 5m with healthy 1h volume + liquidity = ALIVE, not dead. Prefer this over get_birdeye_ohlcv for 5m/8h momentum.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          },
+          "timeframe": {
+            "type": "string",
+            "description": "stats window: 24h (default), 8h, 4h, 1h"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_price_range_context",
+      "description": "7-day historical range position for a token via GeckoTerminal (free, keyless, ~200ms). Returns where the current price sits in the last 168 hourly closes: pct_of_7d_range (0-100, where 100=at the 7d high), percentile_7d (% of hourly closes below current price), 7d high/low/median, support (25th pct), resistance (75th pct), and distance from high/low. Use in Turn 1 research to detect range-ceiling entries. Hard gate: percentile_7d > 85 = SKIP (entering above 85th percentile of 7d closes). Requires: mint. Optional: pool_address (skip DexScreener lookup if already known).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          },
+          "pool_address": {
+            "type": "string",
+            "description": "Pool/pair address (optional \u2014 skips DexScreener resolution if provided)"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_birdeye_holders",
+      "description": "Keyless Birdeye ranked live top holders for a token: owner address, rank, ui_amount, alias (CEX/known wallet). Use to spot whale/dev concentration and live dump risk beyond the static top-10% in get_birdeye_security.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          },
+          "size": {
+            "type": "integer",
+            "description": "max holders to return (default 20)"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_birdeye_markets",
+      "description": "Keyless Birdeye list of ALL markets/pools for a token (name, source/DEX, liquidity, 24h volume) sorted by volume. Reveals the deepest venue and liquidity fragmentation the Meteora-only candidate feed can't see.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_gmgn_wallet_tags",
+      "description": "Keyless GMGN wallet-cohort counts for a token \u2014 the single best rug/dump filter. Counts of smart / renowned / fresh / sniper / bundler / creator / rat_trader / whale / top / following wallets currently holding. High sniper+bundler+fresh with low smart+renowned = trap; healthy smart+renowned = real interest. Use before proposing a spot buy or LP deploy.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_gmgn_top_buyers",
+      "description": "Keyless GMGN early-buyer dump status \u2014 of the first ~70 buyers: how many already sold, holding_rate, bought_rate, top10_holder_rate, top70 sniper hold rate, and how many smart-money wallets are positioned. Low holding_rate / high sold = early money already gone (avoid/exit). High holding_rate + smart money in = conviction.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_gmgn_pool_fee",
+      "description": "Keyless GMGN per-pool fee config for a token: exchange, liquidity, fee_ratio, is_dynamic_fee, pool_type, and Meteora DAMM v2 / virtual-curve fee configs. DLMM-relevant for Scout when sizing fee yield and picking a venue.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          }
+        },
+        "required": [
+          "mint"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_agent_health",
+      "description": "Per-agent health snapshot. Returns {agents:[{agent, enabled, mins_since_active, llm_errors_2h, llm_errors_24h, error_types, broken_tools, verdict}], unhealthy:[...]} where verdict is healthy|idle-ok|recovering|degraded|stalled|dead. Call at the START of every orchestrator tick to detect agents that cannot work \u2014 context overflow, broken candidate sources (Unknown command / no data), stalled crons (enabled but idle for hours/days), or repeated LLM errors. idle-ok = disabled by design (no work). recovering = was failing in 24h but quiet now.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "send_alert",
+      "description": "Send a one-line Telegram alert to the human operator. Use ONLY to surface agent-health problems you detect (alert-only policy \u2014 do NOT auto-remediate schedules or trigger agents from health findings). Keep it concise.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Alert text, one line"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "archive_chat_session",
+      "description": "Backup and truncate the chat_messages table for a long-running agent session. Exports the oldest messages to a gzipped JSON backup, verifies the backup, then deletes those rows from chat.db. Keeps the most recent `keep_last` messages so the agent retains recent context. Does NOT touch the memories table. Old backup files (>30 days) are pruned automatically. Use dry_run=true to preview what would be deleted without modifying anything.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agent_id"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "The Evonic agent ID whose chat.db should be archived. E.g. 'meridian', 'meridian_screener', 'meridian_trader_screener'."
+          },
+          "keep_last": {
+            "type": "number",
+            "description": "Number of most-recent messages to keep. Defaults per-agent: meridian=150, meridian_screener=300, meridian_trader_screener=200, meridian_manager=200, meridian_trader_manager=150. Others default to 200."
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "If true, return what would be archived/deleted without modifying anything. Default false."
+          }
+        }
+      }
+    }
   }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_dex_velocity",
-   "description": "Real-time price + volume velocity for a Meteora pool. Returns DexScreener 5m/1h/6h/24h price/volume/txns AND (when available) an accurate keyless Birdeye overlay in `birdeye_velocity` (30m/1h/2h/4h/24h with buy/sell split + unique wallets + holders). When `velocity_source` is \"birdeye\", PREFER `birdeye_velocity` \u2014 the DexScreener short-windows (esp. 5m) are unreliable for thin pools. Use when verifying a pool just before deploy.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "DLMM pool address"
-     }
-    },
-    "required": [
-     "pool_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_rugcheck_report",
-   "description": "RugCheck.xyz risk report for a token mint. Returns rug score (0-100, lower=better), rugged flag, risk summary (danger/warn counts + names), top holder concentration, and a verdict_hint. Use to verify a token isn't a known scam before deploying. Does not catch every bad token \u2014 combine with on-chain signals.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "mint": {
-      "type": "string",
-      "description": "Token mint address"
-     }
-    },
-    "required": [
-     "mint"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_pumpfun_status",
-   "description": "Pump.fun token status: graduated (migrated to AMM) vs pre-graduation (still on bonding curve), creator wallet, age in hours, market cap, socials, and a verdict_hint. Pre-graduation tokens are statistically much higher rug risk \u2014 VETO unless smart wallets present.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "mint": {
-      "type": "string",
-      "description": "Token mint address"
-     }
-    },
-    "required": [
-     "mint"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_lp_cohort",
-   "description": "FULL LP cohort PnL distribution for a DLMM pool. Decodes every open position in the pool, groups by owner, fetches PnL via Meteora's API for each unique LP, and aggregates: total_positions, total_lps, profitable_pct, median_pnl_pct, p25/p75, top10_by_size_avg_pnl_pct, and a verdict_hint (STRONG_GREEN / STRONG_RED). Highest-signal pool-quality check \u2014 answers 'are most LPs actually making money?' Use during pool review. Slower than other checks (~1-2s), worth the time.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "DLMM pool address"
-     },
-     "max_owners_sampled": {
-      "type": "number",
-      "description": "Cap on unique LPs to sample (default 60). Lower for faster cycles, higher for more accurate stats on large pools."
-     }
-    },
-    "required": [
-     "pool_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "add_pool_note",
-   "description": "Append a freeform note to a poolapos;s memory file. Use this after a position closes or recenters to record observed behavior (e.g. OOR pattern, dump timing, fee/TVL trajectory, final PnL). Future Scout/Argus will read these via get_pool_memory.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "pool_address": {
-      "type": "string",
-      "description": "The DLMM pool address."
-     },
-     "note": {
-      "type": "string",
-      "description": "Concise observation (1-2 sentences). Lead with the signal (\"went OOR 14 min after deploy\"), then a brief WHY if known."
-     }
-    },
-    "required": [
-     "pool_address",
-     "note"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "list_smart_wallets",
-   "description": "Return the current list of tracked smart wallets (alpha KOLs, top LPers) \u2014 addresses, names, categories, types.",
-   "parameters": {
-    "type": "object",
-    "properties": {},
-    "required": []
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "add_smart_wallet",
-   "description": "Add a wallet to the tracked smart-wallet list. Use after observing strong realized PnL from this wallet on recent pools we deployed into.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "address": {
-      "type": "string",
-      "description": "Solana wallet address (base58)."
-     },
-     "name": {
-      "type": "string",
-      "description": "Short label for the wallet, e.g. 'kol_pmoney', 'alpha_lp_5'."
-     },
-     "category": {
-      "type": "string",
-      "description": "Optional tag, e.g. 'alpha', 'kol', 'lp_pro'. Defaults to 'alpha'."
-     },
-     "type": {
-      "type": "string",
-      "enum": [
-       "lp",
-       "holder"
-      ],
-      "description": "'lp' = LP-side wallet (use for LP cohort checks); 'holder' = token-holding wallet."
-     }
-    },
-    "required": [
-     "address",
-     "name"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "remove_smart_wallet",
-   "description": "Remove a wallet from the tracked list. Use when a previously-smart wallet has been underperforming (e.g. multiple negative-PnL exits over the review window).",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "address": {
-      "type": "string",
-      "description": "Solana wallet address to remove."
-     }
-    },
-    "required": [
-     "address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "estimate_close_slippage",
-   "description": "Estimate the slippage cost (USD + %) of closing a specific position right now. Internally calls Jupiter quote API to price the base->SOL swap that would execute on close, and compares against position spot value. Returns 'estimated_slippage_pct' (the headline number) and 'interpretation' (HIGH / MODERATE / LOW). Use BEFORE every close: if slippage > 5%, hold or recenter unless pool is dying.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "position_address": {
-      "type": "string",
-      "description": "The position address."
-     }
-    },
-    "required": [
-     "position_address"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_birdeye_velocity",
-   "description": "Accurate keyless Birdeye per-token velocity at 30m/1h/2h/4h/24h: price change %, volume USD (total + buy/sell split), buy/sell counts, trade count, unique wallets (+change%), plus holder count, liquidity, mcap. Works for ANY token mint (not just trending). Higher fidelity than DexScreener short-windows for momentum/trajectory checks. No 5m window exists \u2014 30m is the shortest.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "mint": {
-      "type": "string",
-      "description": "Token mint address"
-     }
-    },
-    "required": [
-     "mint"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_birdeye_security",
-   "description": "Keyless Birdeye token security/risk report: mintable (mint authority), freeze authority, mint renounced, mutable metadata, creator address + %, owner %, top-10 holder %, token-2022 / transfer-fee flags. Use alongside get_rugcheck_report to verify a token isn't a rug before deploying/buying.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "mint": {
-      "type": "string",
-      "description": "Token mint address"
-     }
-    },
-    "required": [
-     "mint"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_birdeye_gems",
-   "description": "Keyless Birdeye 'find-gems' trending token list with per-window (1h/4h/24h) velocity, unique wallets, holder count and top-10 concentration. An ADDITIONAL momentum/trending candidate source beyond Meteora discovery \u2014 useful when the primary candidate feed is dry. Returns tokens with mint, symbol, price, mcap, liquidity.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "type": {
-      "type": "string",
-      "description": "trending|topGainers|topLosers|highestVolume|mostVisited (default trending)"
-     },
-     "limit": {
-      "type": "integer",
-      "description": "max tokens (default 50)"
-     },
-     "sort_by": {
-      "type": "string",
-      "description": "e.g. tf24h.volumeChangePercent, tf1h.priceChangePercent, holderCount"
-     },
-     "shown_time_frame": {
-      "type": "string",
-      "description": "1h|4h|24h (default 24h)"
-     }
-    },
-    "required": []
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_birdeye_ohlcv",
-   "description": "Keyless Birdeye OHLCV candles for a token at ANY resolution (1s/5s/1m/5m/15m/1h/...). Returns {res, candles:[{t,o,h,l,c,v}]} newest last (v = base-token volume; xclose ~= USD). Use to compute precise short-window momentum/volume (e.g. true 5m) or inspect the recent price path. Params: mint (required), res (default 5m), count (default 60).",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "mint": {
-      "type": "string",
-      "description": "Token mint address"
-     },
-     "res": {
-      "type": "string",
-      "description": "candle resolution: 1s,5s,1m,5m,15m,1h,... (default 5m)"
-     },
-     "count": {
-      "type": "integer",
-      "description": "number of candles back (default 60)"
-     }
-    },
-    "required": [
-     "mint"
-    ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_birdeye_token_stats",
-   "description": "Keyless Birdeye multi-timeframe token stats in ONE call — NATIVE price change at 5m/30m/1h/2h/4h/8h/24h (no OHLCV computation needed), buy/sell counts + dollar-volume split, uniqueTraders, market count, liquidity, mcap, launchpad + pump.fun bonding-curve status. THE multi-timeframe liveness read for spot screening: a quiet 5m with healthy 1h volume + liquidity = ALIVE, not dead. Prefer this over get_birdeye_ohlcv for 5m/8h momentum.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "mint": { "type": "string", "description": "Token mint address" },
-     "timeframe": { "type": "string", "description": "stats window: 24h (default), 8h, 4h, 1h" }
-    },
-    "required": [ "mint" ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_birdeye_holders",
-   "description": "Keyless Birdeye ranked live top holders for a token: owner address, rank, ui_amount, alias (CEX/known wallet). Use to spot whale/dev concentration and live dump risk beyond the static top-10% in get_birdeye_security.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "mint": { "type": "string", "description": "Token mint address" },
-     "size": { "type": "integer", "description": "max holders to return (default 20)" }
-    },
-    "required": [ "mint" ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_birdeye_markets",
-   "description": "Keyless Birdeye list of ALL markets/pools for a token (name, source/DEX, liquidity, 24h volume) sorted by volume. Reveals the deepest venue and liquidity fragmentation the Meteora-only candidate feed can't see.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "mint": { "type": "string", "description": "Token mint address" }
-    },
-    "required": [ "mint" ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_gmgn_wallet_tags",
-   "description": "Keyless GMGN wallet-cohort counts for a token — the single best rug/dump filter. Counts of smart / renowned / fresh / sniper / bundler / creator / rat_trader / whale / top / following wallets currently holding. High sniper+bundler+fresh with low smart+renowned = trap; healthy smart+renowned = real interest. Use before proposing a spot buy or LP deploy.",
-   "parameters": {
-    "type": "object",
-    "properties": { "mint": { "type": "string", "description": "Token mint address" } },
-    "required": [ "mint" ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_gmgn_top_buyers",
-   "description": "Keyless GMGN early-buyer dump status — of the first ~70 buyers: how many already sold, holding_rate, bought_rate, top10_holder_rate, top70 sniper hold rate, and how many smart-money wallets are positioned. Low holding_rate / high sold = early money already gone (avoid/exit). High holding_rate + smart money in = conviction.",
-   "parameters": {
-    "type": "object",
-    "properties": { "mint": { "type": "string", "description": "Token mint address" } },
-    "required": [ "mint" ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_gmgn_pool_fee",
-   "description": "Keyless GMGN per-pool fee config for a token: exchange, liquidity, fee_ratio, is_dynamic_fee, pool_type, and Meteora DAMM v2 / virtual-curve fee configs. DLMM-relevant for Scout when sizing fee yield and picking a venue.",
-   "parameters": {
-    "type": "object",
-    "properties": { "mint": { "type": "string", "description": "Token mint address" } },
-    "required": [ "mint" ]
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "get_agent_health",
-   "description": "Per-agent health snapshot. Returns {agents:[{agent, enabled, mins_since_active, llm_errors_2h, llm_errors_24h, error_types, broken_tools, verdict}], unhealthy:[...]} where verdict is healthy|idle-ok|recovering|degraded|stalled|dead. Call at the START of every orchestrator tick to detect agents that cannot work \u2014 context overflow, broken candidate sources (Unknown command / no data), stalled crons (enabled but idle for hours/days), or repeated LLM errors. idle-ok = disabled by design (no work). recovering = was failing in 24h but quiet now.",
-   "parameters": {
-    "type": "object",
-    "properties": {},
-    "required": []
-   }
-  }
- },
- {
-  "type": "function",
-  "function": {
-   "name": "send_alert",
-   "description": "Send a one-line Telegram alert to the human operator. Use ONLY to surface agent-health problems you detect (alert-only policy \u2014 do NOT auto-remediate schedules or trigger agents from health findings). Keep it concise.",
-   "parameters": {
-    "type": "object",
-    "properties": {
-     "message": {
-      "type": "string",
-      "description": "Alert text, one line"
-     }
-    },
-    "required": [
-     "message"
-    ]
-   }
-  }
- }
 ]

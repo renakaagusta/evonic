@@ -362,8 +362,22 @@ def _split_message(text: str, max_len: int = 4050) -> list:
 
 
 class TelegramChannel(BaseChannel):
+    # Maps (channel_id, chat_id) -> message_thread_id so outbound replies for
+    # each bot route to ITS OWN home topic. Per-process in-memory state.
+    # The first key (channel_id) is the Evonic UUID for the Telegram channel
+    # — i.e. unique per bot. This lets two bots in the same group route their
+    # replies to two different topics.
+    _channel_thread_ids: Dict[str, int] = {}
+
     def __init__(self, channel_id: str, agent_id: str, config: Dict[str, Any]):
         super().__init__(channel_id, agent_id, config)
+        # Seed from persisted config so we survive restarts.
+        pid = (config or {}).get('primary_thread_id')
+        if pid:
+            try:
+                TelegramChannel._channel_thread_ids[channel_id] = int(pid)
+            except Exception:
+                pass
         self._app = None
         self._thread = None
         self._loop = None  # the event loop owned by the polling thread
@@ -418,6 +432,42 @@ class TelegramChannel(BaseChannel):
                 user_id = str(update.message.chat_id)
                 text = strip_system_tags(update.message.text or update.message.caption or '')
                 image_url = None
+                # ── DLMM topic discovery ────────────────────────────────────
+                # Log inbound thread + chat info so we can route outbound to a topic.
+                try:
+                    mtid = getattr(update.message, 'message_thread_id', None)
+                    is_topic_msg = getattr(update.message, 'is_topic_message', None)
+                    chat_obj = update.message.chat
+                    _logger.info(
+                        "[group-discovery] chat_id=%s chat_type=%s chat_title=%r message_thread_id=%s is_topic_message=%s text=%r",
+                        chat_obj.id, chat_obj.type, getattr(chat_obj, 'title', None),
+                        mtid, is_topic_msg, (text or '')[:80],
+                    )
+                    # Remember the topic THIS BOT was messaged in so its replies
+                    # route to the same topic. SET-ONCE: don't overwrite a
+                    # config-set primary_thread_id (the dashboard / backfill is
+                    # authoritative). Auto-capture only when none is configured.
+                    if mtid and is_topic_msg:
+                        # Always update in-memory cache (cheap, lets bots learn
+                        # *some* topic if config is empty)
+                        if not TelegramChannel._channel_thread_ids.get(self.channel_id):
+                            TelegramChannel._channel_thread_ids[self.channel_id] = int(mtid)
+                        # Persist to channel config ONLY if not already set.
+                        # This avoids two-topic ping-pong: posting in Trade should
+                        # not relocate a bot whose home is DLMM.
+                        try:
+                            from models.db import db as _maindb
+                            cfg = dict(self.config or {})
+                            if not cfg.get('primary_thread_id'):
+                                cfg['primary_thread_id'] = int(mtid)
+                                _maindb.update_channel(self.channel_id, {'config': cfg})
+                                self.config = cfg
+                                _logger.info("[group-discovery] auto-pinned channel %s to thread %s",
+                                             self.channel_id, mtid)
+                        except Exception as _e:
+                            _logger.warning("failed to persist primary_thread_id for %s: %s", self.channel_id, _e)
+                except Exception:
+                    pass
 
                 # Allowlist check with pairing-code auto-approve (mirrors WhatsApp pattern)
                 from_user = update.message.from_user
@@ -828,8 +878,37 @@ class TelegramChannel(BaseChannel):
         if not self._app:
             return
         text = _strip_markdown(text)
+        # Route to THIS bot's home topic if we have one cached/persisted
+        thread_id = TelegramChannel._channel_thread_ids.get(self.channel_id)
+        if not thread_id:
+            thread_id = (self.config or {}).get('primary_thread_id')
+            try:
+                if thread_id:
+                    thread_id = int(thread_id)
+            except Exception:
+                thread_id = None
+        send_kwargs = {}
+        if thread_id:
+            send_kwargs['message_thread_id'] = thread_id
         for chunk in _split_message(text):
-            self._run_async(self._app.bot.send_message(chat_id=external_user_id, text=chunk))
+            try:
+                self._run_async(self._app.bot.send_message(chat_id=external_user_id, text=chunk, **send_kwargs))
+            except Exception as _send_err:
+                import logging as _log
+                _err_str = str(_send_err)
+                if thread_id and "Message thread not found" in _err_str:
+                    _log.getLogger(__name__).warning(
+                        "Thread %s not found for channel %s — retrying without thread_id",
+                        thread_id, self.channel_id,
+                    )
+                    TelegramChannel._channel_thread_ids.pop(self.channel_id, None)
+                    try:
+                        _kw2 = {k: v for k, v in send_kwargs.items() if k != "message_thread_id"}
+                        self._run_async(self._app.bot.send_message(chat_id=external_user_id, text=chunk, **_kw2))
+                    except Exception:
+                        pass
+                else:
+                    _log.getLogger(__name__).warning("send_message failed: %s", _send_err)
         from backend.event_stream import event_stream
         event_stream.emit('message_sent', {
             'channel_type': 'telegram',

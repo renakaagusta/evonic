@@ -18,6 +18,15 @@ def resolve_report_to_from_context(
     if not report_to_id.startswith(_AGENT_MSG_PREFIX):
         return report_to_id, report_to_channel_id
 
+    # Inter-agent context: inherit the originating human session that the
+    # runtime threaded in from the incoming message's report_to metadata.
+    # This keeps replies routed to the chat the human actually used instead
+    # of falling back to the agent's latest session (often a shared group).
+    inherited_id = agent_context.get("report_to_id", "") or ""
+    inherited_channel = agent_context.get("report_to_channel_id", "") or ""
+    if inherited_id and not inherited_id.startswith(_AGENT_MSG_PREFIX):
+        return inherited_id, inherited_channel
+
     lookup_id = sender_id
     if agent_context.get("is_subagent"):
         parent_id = agent_context.get("parent_id", "") or ""

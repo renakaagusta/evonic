@@ -1508,6 +1508,13 @@ class AgentRuntime:
                         agent_context['agent_message_depth'] = _meta['agent_message_depth']
                     if _meta.get('from_agent_id'):
                         agent_context['from_agent_id'] = _meta['from_agent_id']
+                    # Thread the originating human session through the chain so
+                    # replies route back to the chat the human used, not the
+                    # agent's latest/most-active session (often a shared group).
+                    if _meta.get('report_to_id'):
+                        agent_context['report_to_id'] = _meta['report_to_id']
+                    if _meta.get('report_to_channel_id'):
+                        agent_context['report_to_channel_id'] = _meta['report_to_channel_id']
             else:
                 # Fall back to SQLite for pre-migration sessions
                 _recent = db.get_session_messages(ctx.session_id, limit=5, agent_id=db_agent_id)
@@ -1519,6 +1526,10 @@ class AgentRuntime:
                                 agent_context['agent_message_depth'] = _meta['agent_message_depth']
                             if _meta.get('from_agent_id'):
                                 agent_context['from_agent_id'] = _meta['from_agent_id']
+                            if _meta.get('report_to_id'):
+                                agent_context['report_to_id'] = _meta['report_to_id']
+                            if _meta.get('report_to_channel_id'):
+                                agent_context['report_to_channel_id'] = _meta['report_to_channel_id']
                         break
 
         # Agent state: restore or create, then check for user approval

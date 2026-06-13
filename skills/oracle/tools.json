@@ -1,0 +1,101 @@
+[
+  {
+    "id": "oracle_candidates",
+    "function": {
+      "name": "oracle_candidates",
+      "description": "Pull latest data for an asset class through the scraper gateway, screen it, and return the distilled evidence cards (signals, fundamentals, news, events, fx, flows) worth assessing. The ONLY market data you need to form a stance — do not fetch raw prices yourself.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "asset_class": { "type": "string", "enum": ["CRYPTO", "US", "IHSG", "COMMODITY"] },
+          "limit": { "type": "integer", "description": "max candidate cards (default 6)" },
+          "session": { "type": "string", "enum": ["open", "pre", "post", "closed"], "description": "current session for these symbols" }
+        },
+        "required": ["asset_class"]
+      }
+    }
+  },
+  {
+    "id": "oracle_publish_stance",
+    "function": {
+      "name": "oracle_publish_stance",
+      "description": "Publish a finished market stance for one symbol (persists it and emits to the dashboard). Call once per symbol after you have reasoned over its evidence card and argued the counter-case.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "asset_class": { "type": "string", "enum": ["CRYPTO", "US", "IHSG", "COMMODITY"] },
+          "symbol": { "type": "string" },
+          "as_of": { "type": "string", "description": "ISO timestamp of the card (use the card's as_of)" },
+          "session": { "type": "string", "enum": ["open", "pre", "post", "closed"] },
+          "trigger": { "type": "string", "description": "scheduled | event:<TYPE>" },
+          "stance": { "type": "string", "enum": ["BULLISH", "NEUTRAL", "BEARISH"] },
+          "score": { "type": "integer", "description": "-100 (max bearish) .. +100 (max bullish); sign must match stance" },
+          "confidence": { "type": "number", "description": "0..1, AFTER the counter-case check" },
+          "horizon": { "type": "string", "description": "e.g. swing_1_2w, swing_2_4w, trend_4_8w" },
+          "reason": { "type": "string", "description": "one concise sentence" },
+          "evidence": {
+            "type": "array",
+            "description": "weighted, source-tagged items you relied on",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string", "enum": ["technical", "company", "macro", "flows", "fx", "news"] },
+                "detail": { "type": "string" },
+                "dir": { "type": "string", "enum": ["+", "-", "0"] },
+                "weight": { "type": "number" },
+                "src": { "type": "string" }
+              },
+              "required": ["type", "detail", "dir", "weight"]
+            }
+          },
+          "gate_verdict": { "type": "string", "enum": ["PUBLISH", "HOLD"], "description": "HOLD if the counter-case makes the call too weak to stand behind" }
+        },
+        "required": ["asset_class", "symbol", "stance", "score", "confidence", "reason", "evidence"]
+      }
+    }
+  },
+  {
+    "id": "oracle_grade_due",
+    "function": {
+      "name": "oracle_grade_due",
+      "description": "Grade every stance whose horizon has elapsed against the realized price direction (CORRECT/WRONG/FLAT + Brier) and emit the gradings. No money is modeled.",
+      "parameters": { "type": "object", "properties": { "now": { "type": "integer", "description": "epoch ms override (testing)" } } }
+    }
+  },
+  {
+    "id": "oracle_scorecard",
+    "function": {
+      "name": "oracle_scorecard",
+      "description": "Directional track record: hit-rate (overall/by class/by stance), calibration (Brier + buckets), and evidence attribution.",
+      "parameters": { "type": "object", "properties": { "asset_class": { "type": "string", "enum": ["CRYPTO", "US", "IHSG", "COMMODITY"] } } }
+    }
+  },
+  {
+    "id": "oracle_backtest",
+    "function": {
+      "name": "oracle_backtest",
+      "description": "Walk-forward directional backtest of the signal over a class universe (hit-rate vs base rate + edge). No P&L.",
+      "parameters": { "type": "object", "properties": { "asset_class": { "type": "string", "enum": ["CRYPTO", "US", "IHSG", "COMMODITY"] }, "horizon": { "type": "integer" } }, "required": ["asset_class"] }
+    }
+  },
+  {
+    "id": "oracle_tick_plan",
+    "function": {
+      "name": "oracle_tick_plan",
+      "description": "Whether a class is due for assessment now (session state + scheduled/event trigger).",
+      "parameters": { "type": "object", "properties": { "asset_class": { "type": "string", "enum": ["CRYPTO", "US", "IHSG", "COMMODITY"] }, "last_run": { "type": "integer", "description": "epoch ms of last assessment" } }, "required": ["asset_class"] }
+    }
+  },
+  {
+    "id": "oracle_daily_brief",
+    "function": { "name": "oracle_daily_brief", "description": "Markdown daily stance brief (today's bull/bear reads by class with reason + evidence).", "parameters": { "type": "object", "properties": {} } }
+  },
+  {
+    "id": "oracle_weekly_review",
+    "function": { "name": "oracle_weekly_review", "description": "Markdown weekly accuracy review (hit-rate, calibration, evidence attribution).", "parameters": { "type": "object", "properties": {} } }
+  },
+  {
+    "id": "oracle_tuning",
+    "function": { "name": "oracle_tuning", "description": "Conservative tuning proposals derived from the scorecard (down/up-weight evidence types, shrink overconfident confidence, recalibrate). Never auto-applied.", "parameters": { "type": "object", "properties": {} } }
+  }
+]

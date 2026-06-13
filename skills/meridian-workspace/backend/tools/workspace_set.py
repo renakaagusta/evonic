@@ -26,7 +26,7 @@ def _row_to_dict(row):
 def _purge_expired(con):
     con.execute(
         "DELETE FROM meridian_shared_memory "
-        "WHERE expires_at IS NOT NULL AND expires_at < datetime('now')"
+        "WHERE expires_at IS NOT NULL AND expires_at < datetime('now') AND key NOT LIKE 'trade:%'"
     )
 
 from datetime import datetime, timedelta
