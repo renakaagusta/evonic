@@ -412,17 +412,27 @@ def _exec_send_agent_message(args: dict, agent_context: dict) -> dict:
             'detail': result,
         }
 
-    # ── Swarmscope mirror: A2A message + real-name heartbeats for both agents ──
+    # ── Swarmscope mirror: A2A message + heartbeats (stack-tagged, with avatar) ──
     try:
+        from backend.event_stream import swarmscope_ns_for, swarmscope_avatar
         _t_name = target_agent.get('name', target_id)
+        _s_ns = swarmscope_ns_for(sender_id)
+        _t_ns = swarmscope_ns_for(target_id)
         _swarmscope_emit("/v1/messages", {
+            "namespace": _s_ns,
             "from_agent": sender_name,
             "to_agent": _t_name,
             "intent": "a2a",
             "content": message,
         })
-        _swarmscope_emit("/v1/agents/heartbeat", {"name": sender_name, "role": "meta", "status": "online"})
-        _swarmscope_emit("/v1/agents/heartbeat", {"name": _t_name, "role": "meta", "status": "online"})
+        _swarmscope_emit("/v1/agents/heartbeat", {
+            "namespace": _s_ns, "name": sender_name, "role": "meta", "status": "online",
+            "attributes": {"agent_id": sender_id, "stack": _s_ns, "avatar": swarmscope_avatar(sender_id)},
+        })
+        _swarmscope_emit("/v1/agents/heartbeat", {
+            "namespace": _t_ns, "name": _t_name, "role": "meta", "status": "online",
+            "attributes": {"agent_id": target_id, "stack": _t_ns, "avatar": swarmscope_avatar(target_id)},
+        })
     except Exception:
         pass
 

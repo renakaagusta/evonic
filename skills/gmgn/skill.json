@@ -1,0 +1,9 @@
+{
+  "id": "gmgn",
+  "name": "GMGN On-chain Analytics",
+  "version": "1.0.0",
+  "description": "Multi-chain memecoin analytics via gmgn-cli: trending tokens, token security, holders, traders, smart-money / KOL trade tracking. Real-time, no cache. Backed by GMGN OpenAPI (https://gmgn.ai/ai). Solana focus; supports bsc/base/eth too. Hunter uses trending+smart-money for screening; Argus uses token-security for pre-deploy veto.",
+  "author": "internal",
+  "tools_file": "tools.json",
+  "variables": []
+}

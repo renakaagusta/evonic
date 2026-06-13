@@ -91,5 +91,66 @@
         "required": []
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "set_schedule_cadence",
+      "description": "Adjust an existing schedule's cadence (interval minutes or cron minute) and/or enabled state. Used by Atlas to scale agent run frequency based on portfolio state. Target by agent_id (owner) or schedule_name (substring match) or schedule_id.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Target agent owner_id (e.g. meridian_manager). The first schedule owned by this agent is updated."
+          },
+          "schedule_name": {
+            "type": "string",
+            "description": "Schedule name substring (case-insensitive)."
+          },
+          "schedule_id": {
+            "type": "string",
+            "description": "Exact schedule id."
+          },
+          "minutes_interval": {
+            "type": "number",
+            "description": "Run every N minutes (interval trigger). Omit if using cron_minute."
+          },
+          "cron_minute": {
+            "type": "string",
+            "description": "Cron minute expression like \"0,15,30,45\". Omit if using minutes_interval."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Enable or disable the schedule. Omit to keep current state."
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "trigger_agent_now",
+      "description": "Immediately fire an agent's registered scheduled action. Use for urgent cases (position PnL crash, OOR detected, etc.) where waiting for next cron tick is too slow. The agent must already have a schedule.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent_id"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Owner agent_id of the schedule to fire (e.g. meridian_manager)."
+          },
+          "reason": {
+            "type": "string",
+            "description": "One-line reason for the urgent trigger (logged for audit)."
+          }
+        }
+      }
+    }
   }
 ]

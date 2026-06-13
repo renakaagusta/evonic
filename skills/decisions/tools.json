@@ -1,0 +1,136 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "record_decision",
+      "description": "Write a structured decision record. Call once per asset you evaluated at end of cycle (before turn_complete). Includes the data you saw, the rules applied, and your verdict. Persists 30 days. Cheap; ~200 tokens of overhead per call.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["phase", "decision", "primary_reason"],
+        "properties": {
+          "asset_mint": {
+            "type": "string",
+            "description": "Base token mint (44-char base58). Required for asset-level decisions; null for portfolio-level."
+          },
+          "asset_symbol": {
+            "type": "string",
+            "description": "Human symbol like 'GACHA', 'RICH'. Optional."
+          },
+          "pool_address": {
+            "type": "string",
+            "description": "Pool address evaluated (if applicable)."
+          },
+          "phase": {
+            "type": "string",
+            "enum": ["screen", "verdict", "manage", "deploy", "close", "exit", "tp", "sl", "skip", "veto"],
+            "description": "Which step in the cycle. screen=candidate evaluation by Scout/Hunter. verdict=Argus/Skeptic review. manage=Helm/Hands holding decision. deploy/close/tp/sl=executed actions. skip/veto=rejection."
+          },
+          "decision": {
+            "type": "string",
+            "enum": ["PROCEED", "VETO", "SKIP", "HOLD", "DEPLOY", "CLOSE", "RECENTER", "DEFER", "BUY", "SELL"],
+            "description": "What you actually decided."
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Your confidence in this decision, 0.0-1.0."
+          },
+          "primary_reason": {
+            "type": "string",
+            "description": "ONE sentence summarizing the deciding factor. Examples: 'TVL $18k below $20k floor', 'PROCEED — fresh pumpfun grad with 91% LP profitable', 'OOR 50 bins above + 3/4 hard degradation triggers'."
+          },
+          "data_snapshot": {
+            "type": "object",
+            "description": "The numeric data you saw. Free-form JSON. Include the fields that mattered: tvl, volume_1h, fee_active_tvl_ratio, holders, bot_holders_pct, top10_pct, mcap, organic_score, volatility, price_change_pct_1h, smart_wallets, etc."
+          },
+          "rules_evaluated": {
+            "type": "array",
+            "description": "Array of {rule, value, threshold, passed} objects showing which rules you applied.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "rule": {"type": "string"},
+                "value": {"type": ["string", "number", "boolean", "null"]},
+                "threshold": {"type": ["string", "number", "null"]},
+                "passed": {"type": "boolean"}
+              }
+            }
+          },
+          "next_step": {
+            "type": "string",
+            "description": "Where this decision flows. e.g. 'sent_to_argus', 'sent_to_skeptic', 'executed_deploy', 'terminal_skip'."
+          },
+          "reasoning_text": {
+            "type": "string",
+            "description": "Optional longer prose explanation. Skip if primary_reason is enough."
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_decisions",
+      "description": "Query the decision ledger by asset / agent / cycle window / decision type. Returns matching records ordered by ts DESC.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "asset_mint": {"type": "string", "description": "Filter by base mint"},
+          "agent_id": {"type": "string", "description": "Filter by agent (e.g. meridian_screener)"},
+          "decision": {"type": "string", "description": "Filter by decision type"},
+          "since_minutes_ago": {"type": "number", "description": "Look back N minutes from now"},
+          "limit": {"type": "number", "description": "Max records (default 20)"}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "trace_asset",
+      "description": "Full cross-agent timeline for one asset. Returns every decision any agent ever made about this mint, ordered chronologically. Best for postmortems.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["asset_mint"],
+        "properties": {
+          "asset_mint": {"type": "string", "description": "Base token mint to trace"}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "explain_cycle",
+      "description": "Summarize a single agent cycle: what was evaluated, what decisions fired, where each candidate went. Use cycle_id from a turn_complete event, or 'latest' for the most recent cycle.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["agent_id"],
+        "properties": {
+          "agent_id": {"type": "string", "description": "Which agent's cycle (e.g. meridian_screener)"},
+          "cycle_id": {"type": "string", "description": "Session id or 'latest'"}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "cycle_summary",
+      "description": "Aggregate stats across all agents for a time window. Counts decisions by type, lists assets evaluated, surfaces the most-evaluated and most-rejected mints.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "since_minutes_ago": {"type": "number", "description": "Window length (default 60)"},
+          "agent_id": {"type": "string", "description": "Filter to single agent (optional)"}
+        }
+      }
+    }
+  }
+]

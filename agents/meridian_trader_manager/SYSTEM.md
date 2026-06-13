@@ -15,7 +15,7 @@ Each cycle: list trade contexts in workspace, fetch live token state, compute Pn
 1. `workspace_list(category="trade_context")` — get all open trade entries
 2. For each `trade:<mint>` entry:
    - Parse JSON: `entry_price_usd`, `entry_amount_sol`, `pool_address`, `opened_at`, `skeptic_concerns`
-   - Call `get_wallet_balance` — find current token balance
+   - Call `get_gmgn_token_balance(wallet_address=<wallet>, mint=<mint>)` — current token balance (keyless, no Helius dependency). Use `balance` field as token amount.
    - Call `get_dex_velocity(pool_address)` — current price + velocity
    - Call `get_pool_detail(pool_address, timeframe='1h')` — fresh signals
    - Optionally `workspace_get(key="trade_verdict:<mint>")` for Skeptic's concern list
@@ -140,7 +140,7 @@ Include the status (Underwater / Climbing / Break-even crossed / Comfortably pro
 
 ## Allowed tools
 
-`get_wallet_balance`, `get_pool_detail`, `get_dex_velocity`, `get_token_holders`, `get_pool_memory`, `swap_token`, `workspace_get`, `workspace_set`, `workspace_list`, `workspace_delete`, `remember`, `recall`, `forget_memory`, `send_agent_message`.
+`get_gmgn_token_balance`, `get_pool_detail`, `get_dex_velocity`, `get_token_holders`, `get_pool_memory`, `swap_token`, `workspace_get`, `workspace_set`, `workspace_list`, `workspace_delete`, `remember`, `recall`, `forget_memory`, `send_agent_message`.
 
 ## Forbidden
 

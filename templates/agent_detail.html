@@ -191,6 +191,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
     <div class="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto flex-shrink-0" style="-webkit-overflow-scrolling: touch;">
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600" onclick="showTab('chat')" data-tab="chat">Chat</button>
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('general')" data-tab="general">Settings</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('memory')" data-tab="memory">Memory</button>
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('knowledge')" data-tab="knowledge">Knowledge</button>
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('tools')" data-tab="tools">Tools</button>
         {% if not agent.is_super %}
@@ -588,6 +589,73 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                 </svg>
                 <p class="text-sm">No artifacts yet.</p>
                 <p class="text-xs mt-1">Artifacts are files that agents save during their work. When an agent produces a report, analysis, or any output, it can be saved here.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Memory Tab -->
+    <div id="tab-memory" class="tab-content hidden flex-1 min-h-0 overflow-y-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 gap-2">
+                <div>
+                    <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Long-term Memory</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Persistent facts the agent uses. Auto-injected into every LLM call via FTS5 search.</p>
+                </div>
+                <button onclick="openMemoryAddModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-2 rounded-md self-start sm:self-auto">
+                    + Add Memory
+                </button>
+            </div>
+
+            <!-- Filters -->
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+                <input type="text" id="memory-search" placeholder="Search memories…" oninput="loadMemoriesDebounced()"
+                    class="flex-1 min-w-[200px] bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-sm rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <div id="memory-category-chips" class="flex flex-wrap gap-1.5"></div>
+            </div>
+
+            <!-- Stats -->
+            <div id="memory-stats" class="text-xs text-gray-500 dark:text-gray-400 mb-3"></div>
+
+            <!-- List -->
+            <div id="memory-list" class="space-y-2"></div>
+
+            <!-- Empty State -->
+            <div id="memory-empty" class="hidden text-center py-12 text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+                </svg>
+                <p class="text-sm">No memories yet.</p>
+                <p class="text-xs mt-1">Memories are added automatically by the agent via the <code class="text-xs">remember</code> tool, or manually by you.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Memory Add/Edit Modal -->
+    <div id="memory-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+            <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 id="memory-modal-title" class="text-base font-semibold text-gray-800 dark:text-gray-100">New Memory</h3>
+                <button onclick="closeMemoryModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="p-4 space-y-3">
+                <input type="hidden" id="memory-modal-id" value="" />
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Category</label>
+                    <input type="text" id="memory-modal-category" placeholder="e.g. risk, sizing, lesson"
+                        class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-sm rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Content</label>
+                    <textarea id="memory-modal-content" rows="6" placeholder="A single clear sentence the agent will recall later."
+                        class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-sm rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Memories are FTS-indexed on save and become available on the agent's next LLM call.</p>
+            </div>
+            <div class="flex justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
+                <button onclick="closeMemoryModal()" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+                <button id="memory-modal-save" onclick="saveMemoryFromModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-md">Save</button>
             </div>
         </div>
     </div>
@@ -1356,6 +1424,7 @@ function showTab(name) {
     if (name === 'channels') loadChannels();
     if (name === 'portals') loadPortals();
     if (name === 'artifacts') loadArtifacts();
+    if (name === 'memory') loadMemories();
     if (name === 'chat' && !chatLoaded) { loadChatHistory(); refreshSessionState(); refreshAgentState(); }
 
     if (name === 'chat') {
@@ -3674,7 +3743,7 @@ setInterval(pollWorkplaceStatus, 5000);
 // ==================== Tab persistence ====================
 // Restore tab from URL hash on page load (same pattern as settings.html)
 (function() {
-    const valid = ['chat', 'general', 'knowledge', 'tools', 'skills', 'channels', 'portals', 'artifacts'];
+    const valid = ['chat', 'general', 'knowledge', 'tools', 'skills', 'channels', 'portals', 'artifacts', 'memory'];
     const hash = location.hash.replace('#', '');
     window._tabInitHash = (hash && valid.includes(hash)) ? hash : 'chat';
     if (window._tabInitHash !== 'chat') {
@@ -3700,6 +3769,172 @@ document.addEventListener('keydown', function(e) {
         if (dd) dd.classList.add('hidden');
     }
 });
+
+
+// ==================== Memory Tab ====================
+let _memoryAllCategories = [];
+let _memoryActiveCategory = null;
+let _memoryLoadDebounce = null;
+
+function loadMemoriesDebounced() {
+    clearTimeout(_memoryLoadDebounce);
+    _memoryLoadDebounce = setTimeout(loadMemories, 250);
+}
+
+async function loadMemories() {
+    const q = (document.getElementById('memory-search').value || '').trim();
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (_memoryActiveCategory) params.set('category', _memoryActiveCategory);
+
+    try {
+        const [catRes, listRes] = await Promise.all([
+            fetch(`/api/agents/${AGENT_ID}/memories/categories`),
+            fetch(`/api/agents/${AGENT_ID}/memories?${params.toString()}`),
+        ]);
+        const catData = await catRes.json();
+        const listData = await listRes.json();
+
+        renderMemoryCategoryChips(catData);
+        renderMemoryList(listData);
+    } catch (e) {
+        console.error('loadMemories failed', e);
+    }
+}
+
+function renderMemoryCategoryChips(data) {
+    _memoryAllCategories = data.categories || [];
+    const wrap = document.getElementById('memory-category-chips');
+    if (!wrap) return;
+    const baseCls = 'inline-flex items-center px-2 py-1 text-xs rounded-md border cursor-pointer transition-colors';
+    const offCls = 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100';
+    const onCls = 'bg-indigo-100 dark:bg-indigo-900/40 border-indigo-300 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300 font-medium';
+
+    const html = [];
+    html.push(`<span class="${baseCls} ${_memoryActiveCategory === null ? onCls : offCls}" onclick="setMemoryCategoryFilter(null)">All <span class="ml-1 text-gray-400">${data.total || 0}</span></span>`);
+    for (const c of _memoryAllCategories) {
+        const isOn = _memoryActiveCategory === c.name;
+        html.push(`<span class="${baseCls} ${isOn ? onCls : offCls}" onclick="setMemoryCategoryFilter('${escapeHtml(c.name)}')">${escapeHtml(c.name)} <span class="ml-1 text-gray-400">${c.count}</span></span>`);
+    }
+    wrap.innerHTML = html.join('');
+}
+
+function setMemoryCategoryFilter(cat) {
+    _memoryActiveCategory = cat;
+    loadMemories();
+}
+
+function renderMemoryList(data) {
+    const list = document.getElementById('memory-list');
+    const stats = document.getElementById('memory-stats');
+    const empty = document.getElementById('memory-empty');
+    const mems = data.memories || [];
+    stats.textContent = `${mems.length} memor${mems.length === 1 ? 'y' : 'ies'} shown`;
+    if (!mems.length) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+    list.innerHTML = mems.map(renderMemoryCard).join('');
+}
+
+function sourceBadge(src) {
+    const map = {
+        agent: ['Agent', 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'],
+        seed: ['Seeded', 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'],
+        extracted: ['Auto-extracted', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'],
+        dashboard: ['You', 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'],
+    };
+    const [label, cls] = map[src] || ['Agent', 'bg-gray-50 text-gray-600'];
+    return `<span class="px-1.5 py-0.5 text-[10px] rounded ${cls}">${label}</span>`;
+}
+
+function renderMemoryCard(m) {
+    const cat = m.category || 'general';
+    const src = m.source_session_id && m.source_session_id.startsWith('dashboard') ? 'dashboard' : (m.source || 'agent');
+    const created = m.created_at ? new Date(m.created_at).toLocaleString() : '';
+    const safeContent = escapeHtml(m.content || '').replace(/\n/g, '<br>');
+    return `
+    <div class="border border-gray-200 dark:border-gray-700 rounded-md p-3 hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors">
+        <div class="flex justify-between items-start gap-3 mb-1.5">
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">${escapeHtml(cat)}</span>
+                ${sourceBadge(src)}
+                <span class="text-[10px] text-gray-400">#${m.id} · ${escapeHtml(created)}</span>
+            </div>
+            <div class="flex gap-1 shrink-0">
+                <button onclick="openMemoryEditModal(${m.id}, '${escapeHtml(cat).replace(/'/g, "\\'")}', ${JSON.stringify(m.content || '').replace(/</g, '\\u003c')})" class="text-xs text-gray-400 hover:text-indigo-600" title="Edit">Edit</button>
+                <button onclick="deleteMemory(${m.id})" class="text-xs text-gray-400 hover:text-red-600" title="Forget">Forget</button>
+            </div>
+        </div>
+        <div class="text-sm text-gray-700 dark:text-gray-200 leading-relaxed">${safeContent}</div>
+    </div>`;
+}
+
+function openMemoryAddModal() {
+    document.getElementById('memory-modal-id').value = '';
+    document.getElementById('memory-modal-category').value = 'general';
+    document.getElementById('memory-modal-content').value = '';
+    document.getElementById('memory-modal-title').textContent = 'New Memory';
+    document.getElementById('memory-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('memory-modal-content').focus(), 50);
+}
+
+function openMemoryEditModal(id, category, content) {
+    document.getElementById('memory-modal-id').value = id;
+    document.getElementById('memory-modal-category').value = category || 'general';
+    document.getElementById('memory-modal-content').value = content || '';
+    document.getElementById('memory-modal-title').textContent = `Edit Memory #${id}`;
+    document.getElementById('memory-modal').classList.remove('hidden');
+}
+
+function closeMemoryModal() {
+    document.getElementById('memory-modal').classList.add('hidden');
+}
+
+async function saveMemoryFromModal() {
+    const id = document.getElementById('memory-modal-id').value;
+    const category = (document.getElementById('memory-modal-category').value || 'general').trim();
+    const content = (document.getElementById('memory-modal-content').value || '').trim();
+    if (!content) {
+        alert('Memory content is required.');
+        return;
+    }
+    const btn = document.getElementById('memory-modal-save');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+        if (id) {
+            await fetch(`/api/agents/${AGENT_ID}/memories/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content, category }),
+            });
+        } else {
+            await fetch(`/api/agents/${AGENT_ID}/memories`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content, category }),
+            });
+        }
+        closeMemoryModal();
+        await loadMemories();
+    } catch (e) {
+        alert('Save failed: ' + e.message);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save';
+    }
+}
+
+async function deleteMemory(id) {
+    if (!confirm(`Forget memory #${id}? It will be soft-deleted (excluded from future recalls).`)) return;
+    try {
+        await fetch(`/api/agents/${AGENT_ID}/memories/${id}`, { method: 'DELETE' });
+        await loadMemories();
+    } catch (e) {
+        alert('Forget failed: ' + e.message);
+    }
+}
 
 
 // ==================== Artifacts Tab ====================

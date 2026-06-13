@@ -1955,3 +1955,127 @@ def api_portal_disconnect(portal_id):
         return jsonify(result)
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ==================== Memories ====================
+# Long-term memory store per agent. Memories are SQLite-backed and FTS5-indexed.
+# Auto-injected into every LLM call via get_memories_for_context().
+
+@agents_bp.route('/api/agents/<agent_id>/memories', methods=['GET'])
+def api_list_memories(agent_id):
+    """List or search memories for an agent.
+
+    Query params:
+      q          - FTS search query (optional)
+      category   - filter to one category (optional, applied after FTS/list)
+      limit      - max rows (default 200)
+      include_expired - if '1', include soft-deleted (default 0)
+    """
+    if not db.get_agent(agent_id):
+        return jsonify({'error': 'Agent not found'}), 404
+    q = (request.args.get('q') or '').strip()
+    category = (request.args.get('category') or '').strip()
+    try:
+        limit = int(request.args.get('limit', 200))
+    except (TypeError, ValueError):
+        limit = 200
+    include_expired = request.args.get('include_expired') == '1'
+
+    try:
+        if q:
+            from backend.agent_runtime.memory_manager import _sanitize_fts_query
+            fts = _sanitize_fts_query(q)
+            if fts:
+                rows = db.search_memories(agent_id, fts, limit) or []
+            else:
+                rows = db.get_all_memories(agent_id) or []
+        else:
+            rows = db.get_all_memories(agent_id) or []
+
+        if not include_expired:
+            rows = [r for r in rows if not r.get('expired')]
+        if category:
+            rows = [r for r in rows if (r.get('category') or '') == category]
+        rows = rows[:limit]
+
+        # Annotate source: seed vs live
+        for r in rows:
+            sid = r.get('source_session_id') or ''
+            r['source'] = 'seed' if sid.startswith('seed') else ('extracted' if sid.startswith('__system') else 'agent')
+
+        return jsonify({
+            'agent_id': agent_id,
+            'count': len(rows),
+            'memories': rows,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@agents_bp.route('/api/agents/<agent_id>/memories', methods=['POST'])
+def api_create_memory(agent_id):
+    """Create a new memory directly (without going through an LLM)."""
+    if not db.get_agent(agent_id):
+        return jsonify({'error': 'Agent not found'}), 404
+    data = request.get_json(silent=True) or {}
+    content = (data.get('content') or '').strip()
+    category = (data.get('category') or 'general').strip()
+    if not content:
+        return jsonify({'error': 'content is required'}), 400
+    try:
+        memory_id = db.add_memory(agent_id, content, category, 'dashboard')
+        return jsonify({'id': memory_id, 'agent_id': agent_id,
+                        'content': content, 'category': category,
+                        'source': 'dashboard'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@agents_bp.route('/api/agents/<agent_id>/memories/<int:memory_id>', methods=['PATCH'])
+def api_update_memory(agent_id, memory_id):
+    """Update memory content/category."""
+    if not db.get_agent(agent_id):
+        return jsonify({'error': 'Agent not found'}), 404
+    data = request.get_json(silent=True) or {}
+    content = (data.get('content') or '').strip()
+    category = data.get('category')
+    if not content:
+        return jsonify({'error': 'content is required'}), 400
+    try:
+        db.update_memory(agent_id, memory_id, content,
+                         category.strip() if isinstance(category, str) else None)
+        return jsonify({'id': memory_id, 'content': content,
+                        'category': category, 'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@agents_bp.route('/api/agents/<agent_id>/memories/<int:memory_id>', methods=['DELETE'])
+def api_delete_memory(agent_id, memory_id):
+    """Soft-delete a memory (sets expired=1)."""
+    if not db.get_agent(agent_id):
+        return jsonify({'error': 'Agent not found'}), 404
+    try:
+        db.expire_memory(agent_id, memory_id)
+        return jsonify({'id': memory_id, 'expired': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@agents_bp.route('/api/agents/<agent_id>/memories/categories', methods=['GET'])
+def api_memory_categories(agent_id):
+    """Return distinct categories + counts."""
+    if not db.get_agent(agent_id):
+        return jsonify({'error': 'Agent not found'}), 404
+    try:
+        rows = db.get_all_memories(agent_id) or []
+        rows = [r for r in rows if not r.get('expired')]
+        counts = {}
+        for r in rows:
+            cat = r.get('category') or 'general'
+            counts[cat] = counts.get(cat, 0) + 1
+        ordered = sorted(counts.items(), key=lambda x: -x[1])
+        return jsonify({'total': len(rows),
+                        'categories': [{'name': k, 'count': v} for k, v in ordered]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
