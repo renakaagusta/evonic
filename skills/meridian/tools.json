@@ -1091,5 +1091,33 @@
         ]
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "archive_chat_session",
+      "description": "Backup and truncate the chat_messages table for a long-running agent session. Exports the oldest messages to a gzipped JSON backup, verifies the backup, then deletes those rows from chat.db. Keeps the most recent `keep_last` messages so the agent retains recent context. Does NOT touch the memories table. Old backup files (>30 days) are pruned automatically. Use dry_run=true to preview what would be deleted without modifying anything.",
+      "parameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agent_id"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "The Evonic agent ID whose chat.db should be archived. E.g. 'meridian', 'meridian_screener', 'meridian_trader_screener'."
+          },
+          "keep_last": {
+            "type": "number",
+            "description": "Number of most-recent messages to keep. Defaults per-agent: meridian=150, meridian_screener=300, meridian_trader_screener=200, meridian_manager=200, meridian_trader_manager=150. Others default to 200."
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "If true, return what would be archived/deleted without modifying anything. Default false."
+          }
+        }
+      }
+    }
   }
 ]
