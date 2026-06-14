@@ -650,11 +650,19 @@ def _elide_stale_tool_outputs(msgs: List[Dict[str, Any]]) -> List[Dict[str, Any]
         if m.get('role') != 'tool':
             continue
         c = m.get('content')
-        if isinstance(c, str) and len(c) > _MAX_STALE_TOOL_OUTPUT_CHARS:
+        if not isinstance(c, str):
+            continue
+        if len(c) > _MAX_STALE_TOOL_OUTPUT_CHARS:
             m['content'] = (
                 f"[stale tool output elided to save context — "
                 f"{len(c)} chars from an earlier turn]"
             )
+        elif '"status": "error"' in c:
+            # Collapse stale tool ERRORS so an agent can't fixate on a long run of
+            # historical failures ("tool broken for N cycles") and keep avoiding a
+            # tool that has since recovered. Recent errors (within the keep window)
+            # are left intact so the agent still reacts to a *current* failure.
+            m['content'] = "[stale tool error elided]"
     return msgs
 
 
