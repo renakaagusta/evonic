@@ -48,23 +48,28 @@ If either source has a condition that has triggered, **sell immediately**. No fu
 
 Do NOT skip an embedded stop on a technicality. Hunter writes these to express his thesis; ignoring them because they're in the "wrong" key is exactly the failure mode this rule was added to prevent (observed 2026-06-01: SQUIRE held to −11% while the embedded "Stop: 1h closes below +10%" was already triggered).
 
-### 2. Take-profit (single TP + trailing stop)
+### 2. Take-profit — SECURE PRINCIPAL, then free-roll (issue #47)
 
-**Why one TP instead of a cascade**: at our position size (~$7-15 per trade), each swap costs ~$0.20 in gas. A 3-tier cascade selling 25% chunks of remaining each time leaves TP-2/-1 net gas-positive by only a few cents (TP-2: +$0.02, TP-1: +$0.06). The compounding-on-residual math only works at $50+ per trade. Until portfolio averages ≥ $50 per spot position, use the single-TP-then-trail design below.
+The goal is asymmetric: **recover your entire initial SOL (principal + both swap costs) at the first TP, then let a zero-cost-basis FREE BAG run.** Once principal is out, the trade can only break-even, win, or moon — it can never become a loss. This is the edge: at our costs (~5-6% round trip incl. the 0.5% Jupiter fee), a symmetric +25%/-15% policy needs a ~55%+ win-rate to break even; the free bag supplies the tail that win-rate can't.
 
-| PnL | Action |
-|---|---|
-| ≥ +25% | **Sell 100%.** Lock the full gain. Don't try to ride further. |
-| ≥ +15% with 5m velocity flipping negative OR 1h volume declining > 30% | **Sell 100%.** Take what's there. |
+**De-risk TP** = `derisk_tp` from the `trade:<mint>` context (Hunter sets it; +25 for cluster tier, +50 for clean). Default +50 if absent. When `current_pnl >= derisk_tp`:
 
-**Trailing exit (replaces TP-1/-2 logic)**: track the peak PnL since entry in workspace via `workspace_set(key="peak_pnl:<mint>", value={pnl_pct, ts})` each cycle.
+1. **Sell the principal-recovery fraction** (covers entry + this exit's cost, c≈2.6%), keep the rest:
+   | de-risk TP | SELL ≈ | FREE BAG ≈ |
+   |---|---|---|
+   | +25% | 85% | 15% |
+   | +50% | 70% | 30% |
+   | +100% | 53% | 47% |
+   General form: `f = 1 / [(1 - 0.026) * (1 + X) * (1 - 0.026)]`, X = de-risk PnL as a decimal (e.g. 0.50). Sell `f * token_balance` via `swap_token`.
+2. After the de-risk sell: `workspace_set(key="freebag:<mint>", value={derisked_at_pnl, freebag_pct, peak_pnl, ts})`.
+3. The remainder is the **FREE BAG — zero cost basis. NO stop-loss. NO trailing. Do NOT apply §3/§3b to it.** Let it run. Exit the free bag ONLY on:
+   - **Ladder TP**: at +100% PnL sell half the remainder; at +300% sell half again (house money — realize some, ride the rest).
+   - **Hard rug/collapse**: any §3b raw-collapse trigger fires (LP pull / is_collapsing) → dump the free bag immediately.
+   - **Timeout**: 24h since entry → close the free bag.
 
-- If current PnL ≥ +10% AND peak PnL has been observed ≥ +15% → trailing exit fires when `current_pnl <= peak_pnl − 8`. Sell 100%.
-- Cite the numbers: `"trailing exit: peak +22.1%, now +13.8%, drop -8.3% (>= 8% threshold)"`.
+**Fast secure** (momentum dying before the de-risk TP): if `current_pnl >= +15%` AND (5m velocity flipping negative OR 1h volume declining > 30%) → secure principal NOW at the current PnL using the same fraction formula (X = current PnL), keep the small free bag. Locking the fund early beats riding it back down.
 
-This rule means: a token that hit +20% and is now at +12% gets sold (locks half the move), instead of being held while it bleeds back to +0%.
-
-**Position-size override**: when single-trade entry was ≥ 0.5 SOL (≈ $40+), you may use multi-TP if you want — gas economics work at that scale. Otherwise single-TP.
+**Pre-de-risk phase** (principal NOT yet secured — no `freebag:<mint>` key yet): §3 stop-loss and §3b collapse below DO apply; they protect principal until the de-risk sell. Once `freebag:<mint>` exists, principal is secured and only the free-bag rug rule above governs the remainder.
 
 ### 3. Stop-loss
 
