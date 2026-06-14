@@ -12,6 +12,7 @@ import sys
 import json
 import importlib
 import importlib.util
+import types
 from typing import Dict, Any, Optional, Callable, List
 
 # Directory containing tool backend Python files
@@ -267,9 +268,31 @@ class ToolRegistry:
             added_path = True
 
         try:
-            spec = importlib.util.spec_from_file_location(f"tools.{tool_name}", tool_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            # Per-skill module namespace: each skill's `from . import _lib` must
+            # resolve to ITS OWN _lib. The old shared `tools.` prefix made every
+            # skill share one `tools._lib` (load-order-dependent) — adding the
+            # oracle skill (also ships _lib.py) silently routed all meridian tool
+            # calls to oracle's _lib => "Unknown oracle tool". Namespace by skill dir.
+            _raw = os.path.basename(os.path.dirname(skill_backend_dir)) if skill_backend_dir else None
+            skill_ns = "".join(c if c.isalnum() else "_" for c in _raw) if _raw else None
+            tools_dir = os.path.join(skill_backend_dir, "tools") if skill_backend_dir else None
+            if skill_ns and tools_dir and os.path.isdir(tools_dir):
+                pkg = f"tools__{skill_ns}"
+                if pkg not in sys.modules:
+                    parent = types.ModuleType(pkg)
+                    parent.__path__ = [tools_dir]
+                    parent.__package__ = pkg
+                    sys.modules[pkg] = parent
+                mod_name = f"{pkg}.{tool_name}"
+                spec = importlib.util.spec_from_file_location(mod_name, tool_path)
+                module = importlib.util.module_from_spec(spec)
+                module.__package__ = pkg
+                sys.modules[mod_name] = module
+                spec.loader.exec_module(module)
+            else:
+                spec = importlib.util.spec_from_file_location(f"tools.{tool_name}", tool_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
         finally:
             if added_path:
                 sys.path.remove(skill_backend_dir)
