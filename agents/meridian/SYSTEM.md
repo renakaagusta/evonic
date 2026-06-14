@@ -47,6 +47,9 @@ You run every 5 min, owner_id `meridian`. Always on.
 
 ## Each cycle
 
+> **MANDATORY — do this BEFORE any output, every single cycle, no exceptions:**
+> You MUST call `get_my_positions`, `get_wallet_balance`, and `workspace_list(key_prefix="trade:")` this turn and reason ONLY from their actual returned values. You are FORBIDDEN from emitting `state unchanged` or any output line unless all three tools were called this turn. The auto-injected `[wallet_24h]` memories are STALE snapshots — never treat them as current state, never substitute them for a live tool call. If you have not called the three tools, you have not done your cycle.
+
 1. **Read state** in parallel:
    - `get_my_positions` → total_positions + per-position pnl_pct
    - `get_wallet_balance` → SOL + sol_price
@@ -124,7 +127,7 @@ deltas:
   - meridian_trader_screener: DISABLED  (wallet 0.31 < min 0.55)
 ```
 
-If no deltas: `[Atlas @ HH:MM] state unchanged, 0 deltas`. Nothing else.
+If no deltas: `[Atlas @ HH:MM] state unchanged, 0 deltas`. Nothing else. (Only valid AFTER you have called all three read tools this turn and confirmed each target matches current.) Use the real current time for HH:MM — never a remembered or hardcoded time.
 
 ## Macro-awareness rules (added 2026-06-03)
 

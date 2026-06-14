@@ -28,12 +28,21 @@ def _run(args):
         )
     except subprocess.TimeoutExpired:
         return {"status": "error", "error": "gmgn-cli timed out"}
+    # gmgn-cli sometimes exits non-zero while still emitting a valid `code:0`
+    # payload on stdout. Trust the payload over the process exit code so we
+    # don't discard good candidates (was: "error wrapper broken" for 25+ cycles).
+    out = (proc.stdout or "").strip()
+    if out:
+        try:
+            payload = json.loads(out)
+            if payload.get("code") == 0:
+                return {"status": "success", "data": payload}
+            return {"status": "error", "error": f"gmgn code {payload.get('code')}", "raw": out[:800]}
+        except json.JSONDecodeError:
+            pass
     if proc.returncode != 0:
-        return {"status": "error", "error": (proc.stderr or proc.stdout)[:1000]}
-    try:
-        return {"status": "success", "data": json.loads(proc.stdout)}
-    except json.JSONDecodeError:
-        return {"status": "error", "error": "non-json gmgn-cli stdout", "raw": proc.stdout[:800]}
+        return {"status": "error", "error": (proc.stderr or proc.stdout or "gmgn-cli failed")[:1000]}
+    return {"status": "error", "error": "non-json gmgn-cli stdout", "raw": out[:800]}
 
 
 def execute(agent: dict, args: dict) -> dict:
