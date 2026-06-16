@@ -54,20 +54,25 @@ The goal is asymmetric: **recover your entire initial SOL (principal + both swap
 
 **De-risk TP** = `derisk_tp` from the `trade:<mint>` context (Hunter sets it; +25 for cluster tier, +50 for clean). Default +50 if absent. When `current_pnl >= derisk_tp`:
 
-1. **Sell the principal-recovery fraction** (covers entry + this exit's cost, c≈2.6%), keep the rest:
-   | de-risk TP | SELL ≈ | FREE BAG ≈ |
-   |---|---|---|
-   | +25% | 85% | 15% |
-   | +50% | 70% | 30% |
-   | +100% | 53% | 47% |
-   General form: `f = 1 / [(1 - 0.026) * (1 + X) * (1 - 0.026)]`, X = de-risk PnL as a decimal (e.g. 0.50). Sell `f * token_balance` via `swap_token`.
+1. **Size the de-risk sell by NET SOL recovered — compute the REAL round-trip cost first; do NOT use a fixed 2.6%.** Memecoin exits eat real depth, so the true round trip is 5–9%, not 2.6% — a fixed 85% fraction leaves principal short.
+   a. **`rt_cost`** = 0.5% Jupiter fee + gas (~0.0004 SOL) + **slippage estimated from `pool_tvl`** (round UP when unsure — under-estimating leaves principal short):
+      | pool_tvl | assume sell slippage | → `rt_cost` ≈ |
+      |---|---|---|
+      | < $50k | 8% | 9% |
+      | $50k–150k | 5% | 6% |
+      | $150k–500k | 3% | 4% |
+      | > $500k | 1.5% | 2.5% |
+   b. **`bag_sol_value`** = `token_balance * current_price_usd / sol_price` (live SOL value of the whole remaining bag).
+   c. **Recovery fraction** `f = entry_sol / (bag_sol_value * (1 - rt_cost))` — the fraction whose NET proceeds (after `rt_cost`) equal your full `entry_sol`. Clamp `f` to `[0, 0.92]`. Sell `f * token_balance` via `swap_token`; keep `(1 - f)` as the free bag.
+   d. If `f >= 0.92`, the PnL is too low to recover principal AND keep a ≥8% free bag after real costs → **do NOT free-roll**: HOLD if momentum is intact, or sell 100% if it's dying. Never leave net cash below `entry_sol`.
+   e. **Verify after the sell:** `wallet_sol` must rise by ≥ `entry_sol`. If it came up short, your slippage estimate was low — record the actual fill cost and top up the sell NEXT cycle so principal is genuinely whole before the free bag rides.
 2. After the de-risk sell: `workspace_set(key="freebag:<mint>", value={derisked_at_pnl, freebag_pct, peak_pnl, ts})`.
 3. The remainder is the **FREE BAG — zero cost basis. NO stop-loss. NO trailing. Do NOT apply §3/§3b to it.** Let it run. Exit the free bag ONLY on:
    - **Ladder TP**: at +100% PnL sell half the remainder; at +300% sell half again (house money — realize some, ride the rest).
    - **Hard rug/collapse**: any §3b raw-collapse trigger fires (LP pull / is_collapsing) → dump the free bag immediately.
    - **Timeout**: 24h since entry → close the free bag.
 
-**Fast secure** (momentum dying before the de-risk TP): if `current_pnl >= +15%` AND (5m velocity flipping negative OR 1h volume declining > 30%) → secure principal NOW at the current PnL using the same fraction formula (X = current PnL), keep the small free bag. Locking the fund early beats riding it back down.
+**Fast secure** (momentum dying before the de-risk TP): if `current_pnl >= +15%` AND (5m velocity flipping negative OR 1h volume declining > 30%) → secure principal NOW using the same NET-recovery fraction `f` from step 1 (with the current PnL and this pool's real `rt_cost`), keep the small free bag. **Only fast-secure if the resulting `f <= 0.90`** — below that the gain doesn't cover principal + a free bag after costs, so either HOLD (if momentum may revive) or sell 100% (if dying). Locking the fund early beats riding it back down.
 
 **Pre-de-risk phase** (principal NOT yet secured — no `freebag:<mint>` key yet): §3 stop-loss and §3b collapse below DO apply; they protect principal until the de-risk sell. Once `freebag:<mint>` exists, principal is secured and only the free-bag rug rule above governs the remainder.
 
