@@ -396,6 +396,97 @@ def _check_swap_trade_lock(args: dict, agent_id: str) -> dict | None:
     }
 
 
+
+# ── Free-bag ladder lock ────────────────────────────────────────────────────
+# A freebag:<mint> workspace entry marks a zero-cost-basis FREE BAG (the remainder
+# kept after a de-risk). Per owner directive it must NEVER be sold on any downside,
+# dip, rug, collapse, or timeout — it is sold ONLY to take profit at the ladder TP
+# (>= +100% PnL). The prompt rule kept being ignored by the model, so enforce it in
+# code: physically block any swap of a freebag mint below +100%, fail-CLOSED.
+_FREEBAG_LADDER_MULT = 2.0  # +100% PnL => price >= 2x the freebag entry price
+
+
+def _freebag_value(mint: str) -> dict | None:
+    """Parsed freebag:<mint> workspace value, or None if no such key / unparseable."""
+    if not mint or not isinstance(mint, str):
+        return None
+    try:
+        con = sqlite3.connect(_EVONIC_DB, timeout=5)
+        row = con.execute(
+            "SELECT value FROM meridian_shared_memory WHERE key = ? LIMIT 1",
+            (f"freebag:{mint}",),
+        ).fetchone()
+        con.close()
+        if not row or not row[0]:
+            return None
+        return json.loads(row[0])
+    except Exception:
+        return None
+
+
+def _token_price_usd(mint: str) -> float | None:
+    """Live USD price via meridian CLI token-info (read-only). None on any failure."""
+    try:
+        proc = subprocess.run(
+            [NODE, f"--env-file={ENV_FILE}", CLI, "token-info", "--query", mint],
+            capture_output=True, text=True, timeout=30,
+        )
+        out = proc.stdout or ""
+        dec = json.JSONDecoder()
+        i = 0
+        while i < len(out):
+            b = out.find("{", i)
+            if b < 0:
+                break
+            try:
+                obj, _end = dec.raw_decode(out[b:])
+            except Exception:
+                i = b + 1
+                continue
+            if isinstance(obj, dict) and isinstance(obj.get("results"), list) and obj["results"]:
+                p = obj["results"][0].get("price")
+                try:
+                    return float(p)
+                except (TypeError, ValueError):
+                    return None
+            i = b + 1
+        return None
+    except Exception:
+        return None
+
+
+def _check_freebag_ladder_lock(args: dict, agent_id: str) -> dict | None:
+    """Block selling a FREE BAG below the +100% ladder TP. Applies to ALL agents
+    (including Hands). Fail-CLOSED: if price cannot be confirmed >= 2x entry, block."""
+    input_mint = (args or {}).get("input_mint")
+    fb = _freebag_value(input_mint)
+    if fb is None:
+        return None  # not a free bag — no restriction
+    try:
+        entry = float(fb.get("entry_price_usd"))
+    except (TypeError, ValueError):
+        entry = None
+    cur = _token_price_usd(input_mint)
+    if entry and cur is not None and cur >= entry * _FREEBAG_LADDER_MULT:
+        return None  # >= +100% ladder TP — the only permitted free-bag sell
+    pnl = f"{(cur/entry - 1)*100:.1f}%" if (entry and cur is not None) else "unconfirmed (price fetch failed)"
+    return {
+        "status": "error",
+        "blocked": True,
+        "error": (
+            f"swap_token blocked: {input_mint} is a FREE BAG (freebag:<mint> key, zero cost basis). "
+            f"It is sold ONLY to take profit at the ladder TP (>= +100% PnL = price >= 2x entry {entry}). "
+            f"Current PnL {pnl} is below +100%, so the free bag is HELD — no rug, collapse, dip, §3b, or "
+            f"24h timeout may sell it (owner directive, enforced in code). If this genuinely IS a >= +100% "
+            f"ladder sell, the price quote did not confirm 2x entry; do nothing and re-check next cycle."
+        ),
+        "input_mint": input_mint,
+        "freebag_entry_price_usd": entry,
+        "current_price_usd": cur,
+        "caller_agent_id": agent_id,
+    }
+
+
 def call(tool: str, args: dict, agent: dict | None = None) -> dict:
     """Public entrypoint used by every handler in this skill."""
     timeout = TIMEOUTS.get(tool, DEFAULT_TIMEOUT_SEC)
@@ -404,6 +495,9 @@ def call(tool: str, args: dict, agent: dict | None = None) -> dict:
     # Cross-stack swap guard
     if tool == "swap_token":
         block = _check_swap_trade_lock(args or {}, agent_id)
+        if block is not None:
+            return block
+        block = _check_freebag_ladder_lock(args or {}, agent_id)
         if block is not None:
             return block
 

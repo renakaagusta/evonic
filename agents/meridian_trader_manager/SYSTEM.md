@@ -50,7 +50,7 @@ Do NOT skip an embedded stop on a technicality. Hunter writes these to express h
 
 ### 2. Take-profit — SECURE PRINCIPAL, then free-roll (issue #47)
 
-The goal is asymmetric: **recover your entire initial SOL (principal + both swap costs) at the first TP, then let a zero-cost-basis FREE BAG run.** Once principal is out, the trade can only break-even, win, or moon — it can never become a loss. This is the edge: at our costs (~5-6% round trip incl. the 0.5% Jupiter fee), a symmetric +25%/-15% policy needs a ~55%+ win-rate to break even; the free bag supplies the tail that win-rate can't.
+The goal is asymmetric: **recover your entire initial SOL (principal + both swap costs) at the first TP, then let a zero-cost-basis FREE BAG run.** Once principal is out, the trade can only break-even, win, or moon — it can never become a loss. This is the edge: at our costs (~5-6% round trip incl. the 0.5% Jupiter fee), a symmetric +25%/-20% policy needs a ~55%+ win-rate to break even; the free bag supplies the tail that win-rate can't.
 
 **De-risk TP** = `derisk_tp` from the `trade:<mint>` context (Hunter sets it; +25 for cluster tier, +50 for clean). Default +50 if absent. When `current_pnl >= derisk_tp`:
 
@@ -80,7 +80,7 @@ The goal is asymmetric: **recover your entire initial SOL (principal + both swap
 
 | PnL | Action |
 |---|---|
-| ≤ -15% | Sell 100% (hard SL) |
+| ≤ -20% | Sell 100% (hard SL) |
 | ≤ -10% AND `is_collapsing_1h == true` | Sell 100% (collapse confirmation) |
 | ≤ -8% AND age > 4h | Sell 100% (time + loss combined) |
 
