@@ -1121,29 +1121,32 @@
     }
   },
   {
-    "name": "estimate_swap_slippage",
-    "description": "Read-only Jupiter quote for a spot swap (NO transaction, no cost). Returns expected_output (net SOL/tokens you would actually receive after fee+slippage), price_impact_pct, and slippage_bps. Use BEFORE a de-risk/exit sell to size the fraction off the REAL net proceeds: quote the full bag -> SOL to get expected_output_full, then sell (entry_sol / expected_output_full) of the bag to recover principal exactly. More accurate than the pool_tvl slippage estimate.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "input_mint": {
-          "type": "string",
-          "description": "Mint to sell (the bag token)."
+    "type": "function",
+    "function": {
+      "name": "estimate_swap_slippage",
+      "description": "Read-only Jupiter quote for a spot swap (NO transaction, no cost). Returns expected_output (net SOL/tokens you would actually receive after fee+slippage), price_impact_pct, and slippage_bps. Use BEFORE a de-risk/exit sell to size the fraction off the REAL net proceeds: quote the full bag -> SOL to get expected_output_full, then sell (entry_sol / expected_output_full) of the bag to recover principal exactly.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "input_mint": {
+            "type": "string",
+            "description": "Mint to sell (the bag token)."
+          },
+          "output_mint": {
+            "type": "string",
+            "description": "Mint to receive (usually SOL: So11111111111111111111111111111111111111112)."
+          },
+          "amount": {
+            "type": "number",
+            "description": "Amount of input token to quote, human-readable units."
+          }
         },
-        "output_mint": {
-          "type": "string",
-          "description": "Mint to receive (usually SOL: So11111111111111111111111111111111111111112)."
-        },
-        "amount": {
-          "type": "number",
-          "description": "Amount of input token to quote, human-readable units."
-        }
-      },
-      "required": [
-        "input_mint",
-        "output_mint",
-        "amount"
-      ]
+        "required": [
+          "input_mint",
+          "output_mint",
+          "amount"
+        ]
+      }
     }
   }
 ]
