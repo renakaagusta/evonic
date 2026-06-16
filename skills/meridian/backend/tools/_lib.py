@@ -75,6 +75,13 @@ def _argv_for(tool: str, args: dict) -> list[str]:
         argv += _flag("--amount", a.get("amount"))
         return argv
 
+    if tool == "estimate_swap_slippage":
+        argv = ["estimate-swap-slippage"]
+        argv += _flag("--from", a.get("input_mint"))
+        argv += _flag("--to", a.get("output_mint"))
+        argv += _flag("--amount", a.get("amount"))
+        return argv
+
     if tool == "add_pool_note":
         return [
             "pool-note",

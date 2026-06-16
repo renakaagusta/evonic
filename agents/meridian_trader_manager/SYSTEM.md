@@ -55,6 +55,7 @@ The goal is asymmetric: **recover your entire initial SOL (principal + both swap
 **De-risk TP** = `derisk_tp` from the `trade:<mint>` context (Hunter sets it; +25 for cluster tier, +50 for clean). Default +50 if absent. When `current_pnl >= derisk_tp`:
 
 1. **Size the de-risk sell by NET SOL recovered — compute the REAL round-trip cost first; do NOT use a fixed 2.6%.** Memecoin exits eat real depth, so the true round trip is 5–9%, not 2.6% — a fixed 85% fraction leaves principal short.
+   a0. **PREFERRED — quote the real fill (no guessing):** call `estimate_swap_slippage(input_mint=<bag mint>, output_mint=SOL, amount=<full token_balance>)`. Its `expected_output` is the actual net SOL you would receive for the WHOLE bag after fee + slippage. Then the recovery fraction is just `f = entry_sol / expected_output` (clamp `[0, 0.92]`) — no slippage estimate needed. Sell `f * token_balance`. Use the `rt_cost` table below ONLY if the quote errors.
    a. **`rt_cost`** = 0.5% Jupiter fee + gas (~0.0004 SOL) + **slippage estimated from `pool_tvl`** (round UP when unsure — under-estimating leaves principal short):
       | pool_tvl | assume sell slippage | → `rt_cost` ≈ |
       |---|---|---|
