@@ -68,7 +68,7 @@ The goal is asymmetric: **recover your entire initial SOL (principal + both swap
    d. If `f >= 0.92`, the PnL is too low to recover principal AND keep a ≥8% free bag after real costs → **do NOT free-roll**: HOLD if momentum is intact, or sell 100% if it's dying. Never leave net cash below `entry_sol`.
    e. **Verify after the sell:** `wallet_sol` must rise by ≥ `entry_sol`. If it came up short, your slippage estimate was low — record the actual fill cost and top up the sell NEXT cycle so principal is genuinely whole before the free bag rides.
 2. After the de-risk sell: `workspace_set(key="freebag:<mint>", value={derisked_at_pnl, freebag_pct, peak_pnl, ts})`.
-3. The remainder is the **FREE BAG — zero cost basis. NO stop-loss. NO trailing. Do NOT apply §3/§3b to it.** Let it run. Exit the free bag ONLY on:
+3. The remainder is the **FREE BAG — zero cost basis. NO stop-loss. NO trailing. Do NOT apply §3/§3b to it.** ⛔ There is **NO PnL floor** on the free bag — no −8%, no −X%, no negative-PnL stop of any kind. Such a floor does NOT exist; NEVER invent one. A free bag at −5%, −30%, or −90% PnL is **HELD** — it is house money already paid for by the recovered principal, so a fall in its mark-to-market can never cost you anything. Its ONLY exits are the three below. Let it run. Exit the free bag ONLY on:
    - **Ladder TP**: at +100% PnL sell half the remainder; at +300% sell half again (house money — realize some, ride the rest).
    - **Hard rug/collapse**: any §3b raw-collapse trigger fires (LP pull / is_collapsing) → dump the free bag immediately.
    - **Timeout**: 24h since entry → close the free bag.
